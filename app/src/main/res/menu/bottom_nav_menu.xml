@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The 'id' for each item MUST match the fragment 'id' in mobile_navigation.xml -->
+
+    <item
+        android:id="@+id/navigation_shop"
+        android:icon="@drawable/ic_bag"
+        android:title="@string/title_shop" />
+
+    <item
+        android:id="@+id/navigation_bag"
+        android:icon="@drawable/ic_bag"
+        android:title="@string/title_bag" />
+
+    <item
+        android:id="@+id/navigation_profile"
+        android:icon="@drawable/ic_profile"
+        android:title="@string/title_profile" />
+
+</menu>

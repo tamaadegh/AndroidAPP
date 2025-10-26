@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">BuyNow</string>
+    <string name="app_name">Tamaade</string>
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="new_product">New</string>
@@ -13,4 +13,7 @@
     <string name="empty_favourite">Empty Favourite</string>
     <string name="add_to_bag">Add To Bag</string>
     <string name="card_number_star">**** **** **** </string>
+    <string name="title_shop">Shop</string>
+    <string name="title_bag">Bag</string>
+    <string name="title_profile">Profile</string>
 </resources>

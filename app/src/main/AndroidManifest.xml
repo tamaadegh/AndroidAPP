@@ -19,8 +19,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:largeHeap="true"
-        android:hardwareAccelerated="false"
         android:theme="@style/Theme.BuyNow">
+        <activity android:name=".presentation.activity.HomeActivity" />
+        <activity android:name=".ui.products.ProductListActivity" />
         <activity android:name=".presentation.activity.PaymentMethodActivity" />
         <activity android:name=".presentation.activity.AddAddressActivity" />
         <activity android:name=".presentation.activity.ShipingAddressActivity" />
@@ -28,16 +29,16 @@
         <activity android:name=".presentation.activity.VisualSearchActivity" />
         <activity android:name=".presentation.activity.ProductDetailsActivity" />
         <activity android:name=".presentation.activity.SettingsActivity" />
-        <activity android:name=".presentation.activity.SplashScreenActivity"
-            android:exported="true">
+        <activity
+            android:name=".presentation.activity.SplashScreenActivity"
+            android:exported="true"
+            android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
         <activity android:name=".presentation.activity.EmailVerifyActivity" />
-        <activity android:name=".presentation.activity.HomeActivity" />
         <activity android:name=".presentation.activity.SignUpActivity" />
         <activity android:name=".presentation.activity.LoginActivity" />
     </application>

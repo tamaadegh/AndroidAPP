@@ -68,7 +68,7 @@
             android:rating="5"
             android:scaleX=".4"
             android:scaleY=".4"
-            style="@style/Widget.AppCompat.RatingBar.Indicator"
+            style="@style/GreenRatingBar"
             android:transformPivotX="0dp"
             android:transformPivotY="15dp" />
 

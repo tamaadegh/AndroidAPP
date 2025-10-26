@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/shopFragment">
+
+    <fragment
+        android:id="@+id/shopFragment"
+        android:name="com.example.tamaade.presentation.fragment.ShopFragment"
+        android:label="fragment_shop" />
+    <fragment
+        android:id="@+id/bagFragment"
+        android:name="com.example.tamaade.presentation.fragment.BagFragment"
+        android:label="fragment_bag" />
+    <fragment
+        android:id="@+id/favFragment"
+        android:name="com.example.tamaade.presentation.fragment.FavFragment"
+        android:label="fragment_fav" />
+    <fragment
+        android:id="@+id/profileFragment"
+        android:name="com.example.tamaade.presentation.fragment.ProfileFragment"
+        android:label="fragment_profile" />
+</navigation>
