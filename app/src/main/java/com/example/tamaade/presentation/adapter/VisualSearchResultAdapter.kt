@@ -28,7 +28,7 @@ class VisualSearchResultAdapter(private val productList: ArrayList<Product>, con
         val product: Product = productList[position]
         holder.productBrandName_singleProduct.text = product.productBrand
         holder.productName_singleProduct.text = product.productName
-        holder.productPrice_singleProduct.text = "$"+product.productPrice
+        holder.productPrice_singleProduct.text = "$${product.productPrice}"
         holder.productRating_singleProduct.rating = product.productRating
 
         Glide.with(ctx)

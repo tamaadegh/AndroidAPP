@@ -6,9 +6,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
-import com.example.tamaade.data.repository.ProductRepository
+import com.example.tamaade.data.local.AppDatabase
 import com.example.tamaade.databinding.ActivityProductListBinding
 import com.example.tamaade.presentation.adapter.ProductAdapter
+import com.example.tamaade.data.model.Product as LocalProduct
 
 class ProductListActivity : AppCompatActivity() {
 
@@ -21,8 +22,8 @@ class ProductListActivity : AppCompatActivity() {
         binding = ActivityProductListBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val repository = ProductRepository()
-        val viewModelFactory = ProductViewModelFactory(repository)
+        val database = AppDatabase.getDatabase(this)
+        val viewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
         viewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
 
         setupRecyclerView()
@@ -39,8 +40,23 @@ class ProductListActivity : AppCompatActivity() {
 
     private fun setupObservers() {
         viewModel.products.observe(this, Observer {
-            products ->
-            productAdapter.submitList(products)
+            remoteProducts ->
+            val localProducts = remoteProducts.map { remoteProduct ->
+                LocalProduct(
+                    id = remoteProduct.id,
+                    productName = remoteProduct.name,
+                    productDescription = remoteProduct.desc,
+                    productImage = remoteProduct.image,
+                    productPrice = remoteProduct.price,
+                    quantity = remoteProduct.quantity,
+                    productCategory = remoteProduct.category,
+                    productBrand = null,
+                    productRating = 0f,
+                    productHave = null,
+                    productDisCount = null
+                )
+            }
+            productAdapter.submitList(localProducts)
         })
 
         viewModel.isLoading.observe(this, Observer {

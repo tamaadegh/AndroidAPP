@@ -8,7 +8,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import com.bumptech.glide.Glide
 import com.example.tamaade.R
+import com.example.tamaade.data.local.AppDatabase
 import com.example.tamaade.data.local.room.CartViewModel
+import com.example.tamaade.data.local.room.CartViewModelFactory
 import com.example.tamaade.data.local.room.ProductEntity
 import com.example.tamaade.data.remote.model.Product
 import com.example.tamaade.databinding.ActivityProductDetailsBinding
@@ -33,10 +35,12 @@ class ProductDetailsActivity : AppCompatActivity() {
 
         window?.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
-        val repository = com.example.tamaade.data.repository.ProductRepository()
-        val viewModelFactory = ProductViewModelFactory(repository)
-        productViewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
-        cartViewModel = ViewModelProvider(this).get(CartViewModel::class.java)
+        val database = AppDatabase.getDatabase(this)
+        val productViewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
+        productViewModel = ViewModelProvider(this, productViewModelFactory).get(ProductViewModel::class.java)
+
+        val cartViewModelFactory = CartViewModelFactory(application)
+        cartViewModel = ViewModelProvider(this, cartViewModelFactory).get(CartViewModel::class.java)
 
         val productId = intent.getIntExtra("PRODUCT_ID", -1)
 

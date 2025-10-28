@@ -13,79 +13,38 @@
         android:layout_height="wrap_content">
 
         <ImageView
-            android:id="@+id/product_image"
+            android:id="@+id/productImage"
             android:layout_width="0dp"
-            android:layout_height="180dp"
+            android:layout_height="0dp"
             android:scaleType="centerCrop"
+            app:layout_constraintDimensionRatio="1:1"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:src="@tools:sample/backgrounds/scenic" />
 
         <TextView
-            android:id="@+id/product_title"
+            android:id="@+id/productName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:maxLines="1"
-            android:ellipsize="end"
+            android:layout_margin="8dp"
             android:textAppearance="?attr/textAppearanceBody2"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/favorite_button"
-            app:layout_constraintTop_toBottomOf="@+id/product_image"
-            tools:text="Product Title" />
-
-        <TextView
-            android:id="@+id/product_brand"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:textAppearance="?attr/textAppearanceCaption"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/product_title"
-            tools:text="Brand" />
-
-        <TextView
-            android:id="@+id/product_price"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginBottom="8dp"
-            android:textAppearance="?attr/textAppearanceBody1"
             android:textStyle="bold"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/product_brand"
-            app:layout_constraintBottom_toBottomOf="parent"
-            tools:text="$120.00" />
-
-        <ImageButton
-            android:id="@+id/favorite_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_favorite_border"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="@+id/product_title"
-            app:layout_constraintBottom_toTopOf="@+id/product_price"/>
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/productImage"
+            tools:text="Product Name" />
 
         <TextView
-            android:id="@+id/discount_badge"
+            android:id="@+id/productPrice"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/discount_badge_background"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp"
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:visibility="gone"
+            android:layout_margin="8dp"
+            android:textAppearance="?attr/textAppearanceBody2"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:text="-20%" />
+            app:layout_constraintTop_toBottomOf="@+id/productName"
+            tools:text="$100" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

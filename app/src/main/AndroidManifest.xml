@@ -20,6 +20,7 @@
         android:supportsRtl="true"
         android:largeHeap="true"
         android:theme="@style/Theme.BuyNow">
+        <activity android:name="com.example.tamaade.presentation.activity.ProductDetailActivity" />
         <activity android:name=".presentation.activity.HomeActivity" />
         <activity android:name=".ui.products.ProductListActivity" />
         <activity android:name=".presentation.activity.PaymentMethodActivity" />

@@ -9,11 +9,13 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.tamaade.data.repository.ProductRepository
+import com.example.tamaade.data.local.AppDatabase
 import com.example.tamaade.databinding.FragmentShopBinding
+import com.example.tamaade.presentation.adapter.CategoryAdapter
 import com.example.tamaade.presentation.adapter.ProductAdapter
 import com.example.tamaade.ui.products.ProductViewModel
 import com.example.tamaade.ui.products.ProductViewModelFactory
+import com.example.tamaade.data.model.Product as LocalProduct
 
 class ShopFragment : Fragment() {
 
@@ -23,6 +25,7 @@ class ShopFragment : Fragment() {
     private lateinit var productViewModel: ProductViewModel
     private lateinit var newProductsAdapter: ProductAdapter
     private lateinit var allProductsAdapter: ProductAdapter
+    private lateinit var categoryAdapter: CategoryAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -36,30 +39,12 @@ class ShopFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val repository = ProductRepository()
-        val viewModelFactory = ProductViewModelFactory(repository)
+        val database = AppDatabase.getDatabase(requireContext())
+        val viewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
         productViewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
 
         setupRecyclerViews()
-
-        productViewModel.products.observe(viewLifecycleOwner, Observer {
-            products ->
-            newProductsAdapter.submitList(products.shuffled().take(10))
-            allProductsAdapter.submitList(products)
-        })
-
-        productViewModel.isLoading.observe(viewLifecycleOwner, Observer {
-            isLoading ->
-            if (isLoading) {
-                binding.shimmerViewContainer.startShimmer()
-                binding.shimmerViewContainer.visibility = View.VISIBLE
-                binding.allProductsRecyclerView.visibility = View.GONE
-            } else {
-                binding.shimmerViewContainer.stopShimmer()
-                binding.shimmerViewContainer.visibility = View.GONE
-                binding.allProductsRecyclerView.visibility = View.VISIBLE
-            }
-        })
+        setupObservers()
     }
 
     private fun setupRecyclerViews() {
@@ -74,6 +59,50 @@ class ShopFragment : Fragment() {
             layoutManager = GridLayoutManager(requireContext(), 2)
             adapter = allProductsAdapter
         }
+
+        categoryAdapter = CategoryAdapter()
+        binding.categoriesRecyclerView.apply {
+            layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+            adapter = categoryAdapter
+        }
+    }
+
+    private fun setupObservers() {
+        productViewModel.products.observe(viewLifecycleOwner, Observer { remoteProducts ->
+            val localProducts = remoteProducts.map { remoteProduct ->
+                LocalProduct(
+                    id = remoteProduct.id,
+                    productName = remoteProduct.name,
+                    productDescription = remoteProduct.desc,
+                    productImage = remoteProduct.image,
+                    productPrice = remoteProduct.price,
+                    quantity = remoteProduct.quantity,
+                    productCategory = remoteProduct.category,
+                    productBrand = null,
+                    productRating = 0f,
+                    productHave = null,
+                    productDisCount = null
+                )
+            }
+            newProductsAdapter.submitList(localProducts.shuffled().take(10))
+            allProductsAdapter.submitList(localProducts)
+        })
+
+        productViewModel.categories.observe(viewLifecycleOwner, Observer { categories ->
+            categoryAdapter.submitList(categories)
+        })
+
+        productViewModel.isLoading.observe(viewLifecycleOwner, Observer { isLoading ->
+            if (isLoading) {
+                binding.shimmerViewContainer.startShimmer()
+                binding.shimmerViewContainer.visibility = View.VISIBLE
+                binding.allProductsRecyclerView.visibility = View.GONE
+            } else {
+                binding.shimmerViewContainer.stopShimmer()
+                binding.shimmerViewContainer.visibility = View.GONE
+                binding.allProductsRecyclerView.visibility = View.VISIBLE
+            }
+        })
     }
 
     override fun onDestroyView() {

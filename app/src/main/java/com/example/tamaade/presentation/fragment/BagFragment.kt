@@ -40,7 +40,7 @@ class BagFragment : Fragment(), CartItemClickAdapter {
         setupRecyclerView()
 
         cartViewModel.allproducts.observe(viewLifecycleOwner, Observer { list ->
-            cartAdapter.updateList(list)
+            cartAdapter.submitList(list)
             updateUI(list)
         })
     }

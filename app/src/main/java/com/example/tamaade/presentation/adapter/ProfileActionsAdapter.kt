@@ -7,8 +7,10 @@ import com.example.tamaade.databinding.ItemProfileActionBinding
 
 data class ProfileAction(val iconResId: Int, val title: String)
 
-class ProfileActionsAdapter(private val actions: List<ProfileAction>) :
-    RecyclerView.Adapter<ProfileActionsAdapter.ActionViewHolder>() {
+class ProfileActionsAdapter(
+    private val actions: List<ProfileAction>,
+    private val onItemClick: (ProfileAction) -> Unit
+) : RecyclerView.Adapter<ProfileActionsAdapter.ActionViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ActionViewHolder {
         val binding =
@@ -24,6 +26,12 @@ class ProfileActionsAdapter(private val actions: List<ProfileAction>) :
 
     inner class ActionViewHolder(private val binding: ItemProfileActionBinding) :
         RecyclerView.ViewHolder(binding.root) {
+
+        init {
+            itemView.setOnClickListener {
+                onItemClick(actions[adapterPosition])
+            }
+        }
 
         fun bind(action: ProfileAction) {
             binding.actionIcon.setImageResource(action.iconResId)
