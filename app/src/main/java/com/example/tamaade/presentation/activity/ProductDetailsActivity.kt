@@ -1,255 +1,103 @@
 package com.example.tamaade.presentation.activity
 
-import android.content.Context
-import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
-import android.widget.*
-import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.lifecycle.ViewModelProviders
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
 import com.bumptech.glide.Glide
-import com.example.tamaade.presentation.adapter.ProductAdapter
 import com.example.tamaade.R
-import com.example.tamaade.data.model.Product
+import com.example.tamaade.data.local.room.CartViewModel
+import com.example.tamaade.data.local.room.ProductEntity
+import com.example.tamaade.data.remote.model.Product
+import com.example.tamaade.databinding.ActivityProductDetailsBinding
+import com.example.tamaade.ui.products.ProductViewModel
+import com.example.tamaade.ui.products.ProductViewModelFactory
 import com.example.tamaade.utils.DefaultCard.GetDefCard
 import com.example.tamaade.utils.Extensions.cardXXGen
 import com.example.tamaade.utils.Extensions.toast
-import com.example.tamaade.data.local.room.CartViewModel
-import com.example.tamaade.data.local.room.ProductEntity
 import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import java.io.IOException
 
 class ProductDetailsActivity : AppCompatActivity() {
 
-    var productIndex: Int = -1
-    lateinit var ProductFrom: String
+    private lateinit var binding: ActivityProductDetailsBinding
     private lateinit var cartViewModel: CartViewModel
-    private val TAG = "TAG"
-    lateinit var productImage_ProductDetailsPage: ImageView
-    lateinit var backIv_ProfileFrag: ImageView
-    lateinit var productName_ProductDetailsPage: TextView
-    lateinit var productPrice_ProductDetailsPage: TextView
-    lateinit var productBrand_ProductDetailsPage: TextView
-    lateinit var productDes_ProductDetailsPage: TextView
-    lateinit var RatingProductDetails: TextView
-    lateinit var productRating_singleProduct: RatingBar
-
-
-
-    lateinit var RecomRecView_ProductDetailsPage: RecyclerView
-    lateinit var newProductAdapter: ProductAdapter
-    lateinit var newProduct: ArrayList<Product>
-
-    lateinit var pName: String
-    var qua: Int = 1
-    var pPrice: Int = 0
-    lateinit var pPid: String
-    lateinit var pImage: String
-
-    lateinit var cardNumber: String
-
+    private lateinit var productViewModel: ProductViewModel
+    private var product: Product? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_product_details)
+        binding = ActivityProductDetailsBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
         window?.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
+        val repository = com.example.tamaade.data.repository.ProductRepository()
+        val viewModelFactory = ProductViewModelFactory(repository)
+        productViewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
+        cartViewModel = ViewModelProvider(this).get(CartViewModel::class.java)
 
-        productIndex = intent.getIntExtra("ProductIndex", -1)
-        ProductFrom = intent.getStringExtra("ProductFrom").toString()
+        val productId = intent.getIntExtra("PRODUCT_ID", -1)
 
-        productImage_ProductDetailsPage = findViewById(R.id.productImage_ProductDetailsPage)
-        productName_ProductDetailsPage = findViewById(R.id.productName_ProductDetailsPage)
-        productPrice_ProductDetailsPage = findViewById(R.id.productPrice_ProductDetailsPage)
-        productBrand_ProductDetailsPage = findViewById(R.id.productBrand_ProductDetailsPage)
-        productDes_ProductDetailsPage = findViewById(R.id.productDes_ProductDetailsPage)
-        productRating_singleProduct = findViewById(R.id.productRating_singleProduct)
-        RatingProductDetails = findViewById(R.id.RatingProductDetails)
-        RecomRecView_ProductDetailsPage = findViewById(R.id.RecomRecView_ProductDetailsPage)
-        backIv_ProfileFrag = findViewById(R.id.backIv_ProfileFrag)
-        val addToCart_ProductDetailsPage: Button = findViewById(R.id.addToCart_ProductDetailsPage)
-        val shippingAddress_productDetailsPage:LinearLayout = findViewById(R.id.shippingAddress_productDetailsPage)
-        val cardNumberProduct_Details:TextView = findViewById(R.id.cardNumberProduct_Details)
+        productViewModel.products.observe(this, { products ->
+            product = products.find { it.id == productId }
+            product?.let { setProductData(it) }
+        })
 
-        cardNumber = GetDefCard()
+        binding.backIvProfileFrag.setOnClickListener { onBackPressed() }
 
-        if(cardNumber == "" || cardNumber == null){
-            cardNumberProduct_Details.text = "You Have No Cards"
+        binding.addToCartProductDetailsPage.setOnClickListener { showAddToCartBottomSheet() }
+
+        setupCardView()
+    }
+
+    private fun setProductData(product: Product) {
+        binding.productNameProductDetailsPage.text = product.name
+        binding.productPriceProductDetailsPage.text = "$${product.price}"
+        binding.productDesProductDetailsPage.text = product.desc
+
+        Glide.with(this)
+            .load(product.image)
+            .into(binding.productImageProductDetailsPage)
+    }
+
+    private fun setupCardView() {
+        val cardNumber = GetDefCard()
+        if (cardNumber.isNullOrEmpty()) {
+            binding.cardNumberProductDetails.text = "You Have No Cards"
+        } else {
+            binding.cardNumberProductDetails.text = cardXXGen(cardNumber)
         }
-        else{
-            cardNumberProduct_Details.text = cardXXGen(cardNumber)
+
+        binding.shippingAddressProductDetailsPage.setOnClickListener {
+            startActivity(android.content.Intent(this, PaymentMethodActivity::class.java))
         }
+    }
 
-
-        shippingAddress_productDetailsPage.setOnClickListener {
-            startActivity(Intent(this, PaymentMethodActivity::class.java))
-        }
-
-
-        newProduct = arrayListOf()
-        setProductData()
-        setRecData()
-
-        RecomRecView_ProductDetailsPage.layoutManager = LinearLayoutManager(
-            this,
-            LinearLayoutManager.HORIZONTAL, false
+    private fun showAddToCartBottomSheet() {
+        val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
+        val bottomSheetView = LayoutInflater.from(applicationContext).inflate(
+            R.layout.fragment_add_to_bag,
+            findViewById(R.id.bottomSheet)
         )
-        RecomRecView_ProductDetailsPage.setHasFixedSize(true)
-        newProductAdapter = ProductAdapter(newProduct, this)
-        RecomRecView_ProductDetailsPage.adapter = newProductAdapter
 
-        backIv_ProfileFrag.setOnClickListener {
-            onBackPressed()
-        }
-
-        addToCart_ProductDetailsPage.setOnClickListener {
-
-            val bottomSheetDialod = BottomSheetDialog(
-                this, R.style.BottomSheetDialogTheme
-            )
-
-            val bottomSheetView = LayoutInflater.from(applicationContext).inflate(
-                R.layout.fragment_add_to_bag,
-                findViewById<ConstraintLayout>(R.id.bottomSheet)
-            )
-
-            bottomSheetView.findViewById<View>(R.id.addToCart_BottomSheet).setOnClickListener {
-
-                pPrice *= bottomSheetView.findViewById<EditText>(R.id.quantityEtBottom).text.toString()
-                    .toInt()
-                addProductToBag()
-                bottomSheetDialod.dismiss()
+        bottomSheetView.findViewById<View>(R.id.addToCart_BottomSheet).setOnClickListener {
+            val quantity = bottomSheetView.findViewById<android.widget.EditText>(R.id.quantityEtBottom).text.toString().toInt()
+            product?.let {
+                val productEntity = ProductEntity(
+                    it.name,
+                    quantity,
+                    it.price.toInt() * quantity,
+                    it.id.toString(),
+                    it.image ?: ""
+                )
+                cartViewModel.insert(productEntity)
+                toast("Added to Bag Successfully")
             }
-
-            bottomSheetView.findViewById<LinearLayout>(R.id.minusLayout).setOnClickListener {
-                if(bottomSheetView.findViewById<EditText>(R.id.quantityEtBottom).text.toString()
-                        .toInt() > 1){
-                    qua--
-                    bottomSheetView.findViewById<EditText>(R.id.quantityEtBottom).setText(qua.toString())
-                }
-            }
-
-            bottomSheetView.findViewById<LinearLayout>(R.id.plusLayout).setOnClickListener {
-                if(bottomSheetView.findViewById<EditText>(R.id.quantityEtBottom).text.toString()
-                        .toInt() < 10){
-                    qua++
-                    bottomSheetView.findViewById<EditText>(R.id.quantityEtBottom).setText(qua.toString())
-                }
-            }
-
-            bottomSheetDialod.setContentView(bottomSheetView)
-            bottomSheetDialod.show()
+            bottomSheetDialog.dismiss()
         }
-
+        bottomSheetDialog.setContentView(bottomSheetView)
+        bottomSheetDialog.show()
     }
-
-    private fun addProductToBag() {
-
-        cartViewModel = ViewModelProviders.of(this).get(CartViewModel::class.java)
-
-        cartViewModel.insert(ProductEntity(pName, qua, pPrice, pPid, pImage))
-        toast("Add to Bag Successfully")
-    }
-
-    fun getJsonData(context: Context, fileName: String): String? {
-
-
-        val jsonString: String
-        try {
-            jsonString = context.assets.open(fileName).bufferedReader().use { it.readText() }
-        } catch (ioException: IOException) {
-            ioException.printStackTrace()
-            return null
-        }
-
-        return jsonString
-    }
-
-    private fun setProductData() {
-
-        var fileJson: String = ""
-
-        if (ProductFrom.equals("Cover")) {
-            fileJson = "CoverProducts.json"
-        }
-        if (ProductFrom.equals("New")) {
-            fileJson = "NewProducts.json"
-        }
-
-
-        val jsonFileString = this.let {
-
-            getJsonData(it, fileJson)
-        }
-
-        val gson = Gson()
-
-
-        val listCoverType = object : TypeToken<List<Product>>() {}.type
-
-        var coverD: List<Product> = gson.fromJson(jsonFileString, listCoverType)
-
-        Glide.with(applicationContext)
-            .load(coverD[productIndex].productImage)
-            .into(productImage_ProductDetailsPage)
-
-        productName_ProductDetailsPage.text = coverD[productIndex].productName
-        productPrice_ProductDetailsPage.text = "$" + coverD[productIndex].productPrice
-        productBrand_ProductDetailsPage.text = coverD[productIndex].productBrand
-        productDes_ProductDetailsPage.text = coverD[productIndex].productDes
-        productRating_singleProduct.rating = coverD[productIndex].productRating
-        RatingProductDetails.text = coverD[productIndex].productRating.toString() + " Rating on this Product."
-
-        pName = coverD[productIndex].productName
-        pPrice = coverD[productIndex].productPrice.toInt()
-        pPid = coverD[productIndex].productId
-        pImage = coverD[productIndex].productImage
-
-    }
-
-    private fun setRecData() {
-
-
-        var fileJson: String = ""
-
-        if (ProductFrom.equals("Cover")) {
-            fileJson = "NewProducts.json"
-        }
-        if (ProductFrom.equals("New")) {
-            fileJson = "CoverProducts.json"
-        }
-
-
-        val jsonFileString = this.let {
-
-            getJsonData(it, fileJson)
-        }
-        val gson = Gson()
-
-        val listCoverType = object : TypeToken<List<Product>>() {}.type
-
-        var coverD: List<Product> = gson.fromJson(jsonFileString, listCoverType)
-
-        coverD.forEachIndexed { idx, person ->
-
-            if (idx < 9) {
-                newProduct.add(person)
-            }
-
-
-        }
-
-
-    }
-
 }
-
-

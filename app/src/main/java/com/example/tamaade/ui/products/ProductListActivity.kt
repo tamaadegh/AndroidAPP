@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.tamaade.data.repository.ProductRepository
 import com.example.tamaade.databinding.ActivityProductListBinding
+import com.example.tamaade.presentation.adapter.ProductAdapter
 
 class ProductListActivity : AppCompatActivity() {
 
@@ -29,7 +30,7 @@ class ProductListActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        productAdapter = ProductAdapter(emptyList())
+        productAdapter = ProductAdapter()
         binding.recyclerViewProducts.apply {
             layoutManager = GridLayoutManager(this@ProductListActivity, 2)
             adapter = productAdapter
@@ -39,7 +40,7 @@ class ProductListActivity : AppCompatActivity() {
     private fun setupObservers() {
         viewModel.products.observe(this, Observer {
             products ->
-            productAdapter.updateProducts(products)
+            productAdapter.submitList(products)
         })
 
         viewModel.isLoading.observe(this, Observer {
