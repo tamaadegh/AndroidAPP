@@ -42,6 +42,10 @@
         <activity android:name=".presentation.activity.EmailVerifyActivity" />
         <activity android:name=".presentation.activity.SignUpActivity" />
         <activity android:name=".presentation.activity.LoginActivity" />
+        <activity
+            android:name=".activities.CheckoutActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BuyNow" />
     </application>
 
 </manifest>

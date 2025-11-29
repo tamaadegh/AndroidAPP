@@ -1,5 +1,6 @@
 package com.example.tamaade.presentation.fragment
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -9,6 +10,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.tamaade.activities.CheckoutActivity
 import com.example.tamaade.data.local.room.CartViewModel
 import com.example.tamaade.data.local.room.ProductEntity
 import com.example.tamaade.databinding.FragmentBagBinding
@@ -43,6 +45,19 @@ class BagFragment : Fragment(), CartItemClickAdapter {
             cartAdapter.submitList(list)
             updateUI(list)
         })
+
+        binding.checkoutButton.setOnClickListener {
+            val totalAmount = cartViewModel.allproducts.value?.sumOf { it.price }?.toDouble() ?: 0.0
+
+            if (totalAmount > 0) {
+                val intent = Intent(requireActivity(), CheckoutActivity::class.java).apply {
+                    putExtra(CheckoutActivity.EXTRA_AMOUNT, totalAmount)
+                }
+                startActivity(intent)
+            } else {
+                Toast.makeText(requireContext(), "Your cart is empty.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun setupRecyclerView() {
