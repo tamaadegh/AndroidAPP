@@ -1,49 +1,30 @@
 package com.example.tamaade.data.repository
 
-import com.example.tamaade.api.RetrofitInstance
 import com.example.tamaade.data.local.CartDao
-import com.example.tamaade.data.local.CartItem
 import com.example.tamaade.data.local.FavoriteDao
-import com.example.tamaade.data.local.FavoriteItem
-import com.example.tamaade.data.remote.model.Category
-import com.example.tamaade.data.remote.model.Product
-import kotlinx.coroutines.flow.Flow
+import com.example.tamaade.data.network.RetrofitClient
+import com.example.tamaade.data.model.Product
+import com.example.tamaade.data.network.ProductDto
 
 class ProductRepository(private val cartDao: CartDao, private val favoriteDao: FavoriteDao) {
 
+    private val apiService = RetrofitClient.instance
+
     suspend fun getProducts(): List<Product> {
-        return RetrofitInstance.api.getProducts()
+        return apiService.getProducts().results.map { it.toProduct() }
     }
 
-    suspend fun getCategories(): List<Category> {
-        return RetrofitInstance.api.getCategories()
+    suspend fun getProductDetail(slug: String): Product {
+        return apiService.getProductDetail(slug).toProduct()
     }
+}
 
-    fun getCartItems(): Flow<List<CartItem>> {
-        return cartDao.getCartItems()
-    }
-
-    suspend fun addToCart(productId: Int, quantity: Int) {
-        cartDao.insert(CartItem(productId, quantity))
-    }
-
-    suspend fun removeFromCart(productId: Int) {
-        cartDao.delete(productId)
-    }
-
-    fun getFavoriteItems(): Flow<List<FavoriteItem>> {
-        return favoriteDao.getFavoriteItems()
-    }
-
-    suspend fun isFavorite(productId: Int): Boolean {
-        return favoriteDao.getFavoriteItem(productId) != null
-    }
-
-    suspend fun addToFavorites(productId: Int) {
-        favoriteDao.insert(FavoriteItem(productId))
-    }
-
-    suspend fun removeFromFavorites(productId: Int) {
-        favoriteDao.delete(productId)
-    }
+fun ProductDto.toProduct(): Product {
+    return Product(
+        id = id,
+        productName = name,
+        productImage = productThumbnail,
+        productPrice = "", // You may want to add price to your Dto
+        productDescription = "", // You may want to add description to your Dto
+    )
 }

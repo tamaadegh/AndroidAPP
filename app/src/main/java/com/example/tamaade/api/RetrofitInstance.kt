@@ -7,7 +7,7 @@ object RetrofitInstance {
 
     private val retrofit by lazy {
         Retrofit.Builder()
-            .baseUrl("https://tamaadeapi-7it5.onrender.com/")
+            .baseUrl("https://tamaade.com/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
     }
