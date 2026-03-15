@@ -26,29 +26,18 @@ class VisualSearchResultAdapter(private val productList: ArrayList<Product>, con
     override fun onBindViewHolder(holder: visualViewHolder, position: Int) {
 
         val product: Product = productList[position]
-        holder.productBrandName_singleProduct.text = product.productBrand
+        holder.productBrandName_singleProduct.text = product.productCategory
         holder.productName_singleProduct.text = product.productName
         holder.productPrice_singleProduct.text = "$${product.productPrice}"
-        holder.productRating_singleProduct.rating = product.productRating
+        holder.productRating_singleProduct.rating = 0f // Default rating since not available
 
         Glide.with(ctx)
             .load(product.productImage)
             .placeholder(R.drawable.bn)
             .into(holder.productImage_singleProduct)
 
-
-        if(product.productHave == true){
-            holder.discountTv_singleProduct.text = product.productDisCount
-            holder.discount_singleProduct.visibility = View.VISIBLE
-        }
-
-        if(product.productHave == false){
-
-            holder.discount_singleProduct.visibility = View.VISIBLE
-            holder.discountTv_singleProduct.text = "New"
-
-        }
-
+        // Hide discount section since we don't have discount data
+        holder.discount_singleProduct.visibility = View.GONE
 
     }
 

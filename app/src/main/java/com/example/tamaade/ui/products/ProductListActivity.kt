@@ -23,7 +23,7 @@ class ProductListActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         val database = AppDatabase.getDatabase(this)
-        val viewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
+        val viewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao(), database.productDao())
         viewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
 
         setupRecyclerView()
@@ -45,15 +45,11 @@ class ProductListActivity : AppCompatActivity() {
                 LocalProduct(
                     id = remoteProduct.id,
                     productName = remoteProduct.name,
+                    productCategory = remoteProduct.category,
                     productDescription = remoteProduct.desc,
                     productImage = remoteProduct.image,
                     productPrice = remoteProduct.price,
-                    quantity = remoteProduct.quantity,
-                    productCategory = remoteProduct.category,
-                    productBrand = null,
-                    productRating = 0f,
-                    productHave = null,
-                    productDisCount = null
+                    slug = remoteProduct.slug
                 )
             }
             productAdapter.submitList(localProducts)

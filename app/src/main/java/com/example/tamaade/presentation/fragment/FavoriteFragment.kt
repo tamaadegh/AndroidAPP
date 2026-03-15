@@ -8,31 +8,27 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.tamaade.data.local.AppDatabase
-import com.example.tamaade.databinding.FragmentShopBinding
-import com.example.tamaade.presentation.adapter.CategoryAdapter
+import com.example.tamaade.databinding.FragmentFavoriteBinding
 import com.example.tamaade.presentation.adapter.ProductAdapter
 import com.example.tamaade.ui.products.ProductViewModel
 import com.example.tamaade.ui.products.ProductViewModelFactory
 import com.example.tamaade.data.model.Product as LocalProduct
 
-class ShopFragment : Fragment() {
+class FavoriteFragment : Fragment() {
 
-    private var _binding: FragmentShopBinding? = null
+    private var _binding: FragmentFavoriteBinding? = null
     private val binding get() = _binding!!
 
     private lateinit var productViewModel: ProductViewModel
-    private lateinit var newProductsAdapter: ProductAdapter
-    private lateinit var allProductsAdapter: ProductAdapter
-    private lateinit var categoryAdapter: CategoryAdapter
+    private lateinit var favoritesAdapter: ProductAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentShopBinding.inflate(inflater, container, false)
+        _binding = FragmentFavoriteBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -40,7 +36,11 @@ class ShopFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         val database = AppDatabase.getDatabase(requireContext())
-        val viewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
+        val viewModelFactory = ProductViewModelFactory(
+            database.cartDao(),
+            database.favoriteDao(),
+            database.productDao()
+        )
         productViewModel = ViewModelProvider(this, viewModelFactory).get(ProductViewModel::class.java)
 
         setupRecyclerViews()
@@ -48,48 +48,33 @@ class ShopFragment : Fragment() {
     }
 
     private fun setupRecyclerViews() {
-        newProductsAdapter = ProductAdapter()
-        binding.newProductsRecyclerView.apply {
-            layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
-            adapter = newProductsAdapter
-        }
-
-        allProductsAdapter = ProductAdapter()
+        favoritesAdapter = ProductAdapter()
         binding.allProductsRecyclerView.apply {
             layoutManager = GridLayoutManager(requireContext(), 2)
-            adapter = allProductsAdapter
-        }
-
-        categoryAdapter = CategoryAdapter()
-        binding.categoriesRecyclerView.apply {
-            layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
-            adapter = categoryAdapter
+            adapter = favoritesAdapter
         }
     }
 
     private fun setupObservers() {
-        productViewModel.products.observe(viewLifecycleOwner, Observer { remoteProducts ->
+        productViewModel.favoriteProducts.observe(viewLifecycleOwner, Observer { remoteProducts ->
             val localProducts = remoteProducts.map { remoteProduct ->
                 LocalProduct(
                     id = remoteProduct.id,
                     productName = remoteProduct.name,
+                    productCategory = remoteProduct.category,
                     productDescription = remoteProduct.desc,
                     productImage = remoteProduct.image,
                     productPrice = remoteProduct.price,
-                    quantity = remoteProduct.quantity,
-                    productCategory = remoteProduct.category,
-                    productBrand = null,
-                    productRating = 0f,
-                    productHave = null,
-                    productDisCount = null
+                    slug = remoteProduct.slug
                 )
             }
-            newProductsAdapter.submitList(localProducts.shuffled().take(10))
-            allProductsAdapter.submitList(localProducts)
-        })
 
-        productViewModel.categories.observe(viewLifecycleOwner, Observer { categories ->
-            categoryAdapter.submitList(categories)
+            if (localProducts.isEmpty()) {
+                // Show empty state?
+                favoritesAdapter.submitList(emptyList())
+            } else {
+                favoritesAdapter.submitList(localProducts)
+            }
         })
 
         productViewModel.isLoading.observe(viewLifecycleOwner, Observer { isLoading ->

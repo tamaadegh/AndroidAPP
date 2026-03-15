@@ -5,57 +5,42 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.example.tamaade.R
-import com.example.tamaade.utils.FirebaseUtils
-import kotlinx.coroutines.Dispatchers
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @SuppressLint("CustomSplashScreen")
 class SplashScreenActivity : AppCompatActivity() {
 
-    private var isReady = false
-    private var isUserLoggedIn: Boolean? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        installSplashScreen()
+        setContentView(R.layout.activity_splash_screen)
 
-        val splashScreen = installSplashScreen()
+        val logoImageView: ImageView = findViewById(R.id.logoImageView)
+        val mottoTextView: TextView = findViewById(R.id.mottoTextView)
 
-        // Keep the splash screen on-screen until we're ready.
-        splashScreen.setKeepOnScreenCondition { !isReady }
+        val fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in)
+        val scaleUp = AnimationUtils.loadAnimation(this, R.anim.scale_up)
 
-        splashScreen.setOnExitAnimationListener { splashScreenView ->
-            val slideUp = AnimationUtils.loadAnimation(this, R.anim.text_slide_up)
-            splashScreenView.view.startAnimation(slideUp)
+        logoImageView.startAnimation(scaleUp)
+        mottoTextView.startAnimation(fadeIn)
 
-            slideUp.setAnimationListener(object : Animation.AnimationListener {
-                override fun onAnimationStart(animation: Animation?) {}
-
-                override fun onAnimationEnd(animation: Animation?) {
-                    splashScreenView.remove()
-                    navigate()
-                }
-
-                override fun onAnimationRepeat(animation: Animation?) {}
-            })
-        }
-
-        // Check user in background
         lifecycleScope.launch {
-            isUserLoggedIn = withContext(Dispatchers.IO) {
-                FirebaseUtils.firebaseUser != null
-            }
-            // Now we are ready to dismiss the splash screen
-            isReady = true
+            delay(2000) // Adjusted delay for animations
+            navigate()
         }
     }
 
     private fun navigate() {
-        val intent = if (isUserLoggedIn == true) {
+        val user = FirebaseAuth.getInstance().currentUser
+        val intent = if (user != null) {
             Intent(this, HomeActivity::class.java)
         } else {
             Intent(this, LoginActivity::class.java)

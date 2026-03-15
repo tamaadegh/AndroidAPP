@@ -1,7 +1,6 @@
 package com.example.tamaade.presentation.activity
 
 
-import android.app.ProgressDialog
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -18,8 +17,10 @@ import com.example.tamaade.R
 import com.example.tamaade.data.model.User
 
 import com.example.tamaade.utils.Extensions.toast
+import com.example.tamaade.presentation.LoadingDialog
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.userProfileChangeRequest
 
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -42,7 +43,7 @@ class SignUpActivity : AppCompatActivity() {
     private val userCollectionRef = Firebase.firestore.collection("Users")
     val firebaseAuth: FirebaseAuth = FirebaseAuth.getInstance()
 
-    lateinit var progressDialog:ProgressDialog
+    lateinit var loadingDialog: LoadingDialog
 
     private val emailPattern = "[a-zA-Z0-9._-]+@[a-z]+\\.+[a-z]+"
 
@@ -59,7 +60,7 @@ class SignUpActivity : AppCompatActivity() {
 
 
 
-        progressDialog = ProgressDialog(this)
+        loadingDialog = LoadingDialog(this)
 
         textAutoCheck()
 
@@ -222,18 +223,15 @@ class SignUpActivity : AppCompatActivity() {
             return
         }
 
-        signIn()
+        signUp()
 
 
     }
 
 
 
-    private fun signIn() {
-
-        progressDialog.setTitle("Please Wait")
-        progressDialog.setMessage("Creating Account")
-        progressDialog.show()
+    private fun signUp() {
+        loadingDialog.startLoadingDialog()
 
         val emailV: String = emailEt.text.toString()
         val passV: String = passEt.text.toString()
@@ -243,19 +241,25 @@ class SignUpActivity : AppCompatActivity() {
 
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
-                        progressDialog.setMessage("Save User Data")
+                        val firebaseUser = firebaseAuth.currentUser
+                        
+                        // Update display name in Firebase Auth
+                        val profileUpdates = userProfileChangeRequest {
+                            displayName = fullname
+                        }
+                        
+                        firebaseUser?.updateProfile(profileUpdates)?.addOnCompleteListener { profileTask ->
+                            val user = User(fullname,"",firebaseAuth.uid.toString(),emailV,"","")
+                            storeUserData(user)
+                        } ?: run {
+                            // Fallback if user is null for some reason
+                            val user = User(fullname,"",firebaseAuth.uid.toString(),emailV,"","")
+                            storeUserData(user)
+                        }
 
-
-                        val user = User(fullname,"",firebaseAuth.uid.toString(),emailV,"","")
-
-                        storeUserData(user)
-
-                        val intent = Intent(this, HomeActivity::class.java)
-                        startActivity(intent)
-                        finish()
                     } else {
-                        progressDialog.dismiss()
-                        toast("failed to Authenticate !")
+                        loadingDialog.dismissDialog()
+                        toast("failed to Authenticate: ${task.exception?.message}")
                     }
                 }
 
@@ -267,38 +271,18 @@ class SignUpActivity : AppCompatActivity() {
             userCollectionRef.document(firebaseAuth.uid.toString()).set(user).await()
             withContext(Dispatchers.Main){
                 toast("Data Saved")
-                progressDialog.dismiss()
+                loadingDialog.dismissDialog()
+                val intent = Intent(this@SignUpActivity, HomeActivity::class.java)
+                startActivity(intent)
+                finish()
             }
 
         }catch (e:Exception){
             withContext(Dispatchers.Main){
                 toast(""+ e.message.toString())
-                progressDialog.dismiss()
+                loadingDialog.dismissDialog()
             }
         }
     }
 
-//    private fun sendEmailVerification() {
-//        progressDialog.setMessage("Send Verification")
-//        firebaseUser?.let {
-//            it.sendEmailVerification().addOnCompleteListener { task ->
-//                if (task.isSuccessful) {
-//                    progressDialog.dismiss()
-//                    val intent = Intent(this, EmailVerifyActivity::class.java)
-//                    intent.putExtra("EmailAddress", emailEt.text.toString().trim())
-//                    intent.putExtra("loginPassword", passEt.text.toString().trim())
-//                    startActivity(intent)
-//                    finish()
-//                }
-//            }
-//                .addOnFailureListener {
-//                    progressDialog.dismiss()
-//                    toast("Verification Link Send failed")
-//                }
-//        }
-//    }
-
-
 }
-
-

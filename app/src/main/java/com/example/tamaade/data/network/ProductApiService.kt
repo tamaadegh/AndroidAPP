@@ -9,5 +9,5 @@ interface ProductApiService {
     suspend fun getProducts(): ProductListResponse
 
     @GET("product/storefront/api/products/{slug}/")
-    suspend fun getProductDetail(@Path("slug") slug: String): ProductDto
+    suspend fun getProductDetail(@Path("slug") slug: String): ProductDetailDto
 }

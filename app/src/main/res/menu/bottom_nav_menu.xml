@@ -4,9 +4,14 @@
     <!-- The 'id' for each item MUST match the fragment 'id' in mobile_navigation.xml -->
 
     <item
-        android:id="@+id/navigation_shop"
-        android:icon="@drawable/ic_bag"
-        android:title="@string/title_shop" />
+        android:id="@+id/navigation_home"
+        android:icon="@drawable/ic_home"
+        android:title="Home" />
+
+    <item
+        android:id="@+id/navigation_favorite"
+        android:icon="@drawable/ic_favorite_border"
+        android:title="Favorites" />
 
     <item
         android:id="@+id/navigation_bag"

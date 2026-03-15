@@ -36,7 +36,7 @@ class ProductDetailsActivity : AppCompatActivity() {
         window?.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
         val database = AppDatabase.getDatabase(this)
-        val productViewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao())
+        val productViewModelFactory = ProductViewModelFactory(database.cartDao(), database.favoriteDao(), database.productDao())
         productViewModel = ViewModelProvider(this, productViewModelFactory).get(ProductViewModel::class.java)
 
         val cartViewModelFactory = CartViewModelFactory(application)

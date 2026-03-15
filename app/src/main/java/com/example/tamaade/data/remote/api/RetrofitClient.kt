@@ -4,9 +4,12 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "https://tamaadeapi-7it5.onrender.com/"
+
+    // Using Production API live link
+    private const val BASE_URL = "https://dashboard-production-8b7f.up.railway.app/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -14,14 +17,17 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    val apiService: ApiService by lazy {
-        Retrofit.Builder()
+    val instance: ApiService by lazy {
+        val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
-            .client(okHttpClient) // Add the OkHttpClient here
             .build()
-            .create(ApiService::class.java)
+        retrofit.create(ApiService::class.java)
     }
 }
