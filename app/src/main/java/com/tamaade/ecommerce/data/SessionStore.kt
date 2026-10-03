@@ -27,11 +27,15 @@ class SessionStore(context: Context) {
         val raw = prefs.getString(KEY_USER, null) ?: return null
         return try {
             val json = JSONObject(raw)
+            val email = json.stringOrNull("email").orEmpty()
+            val phone = json.stringOrNull("phone_number").orEmpty()
+            if (email.isEmpty() && phone.isEmpty()) return null
             UserSession(
-                email = json.stringOrNull("email") ?: return null,
+                email = email,
                 firstName = json.stringOrNull("first_name").orEmpty(),
                 lastName = json.stringOrNull("last_name").orEmpty(),
-                id = json.intOrNull("id")
+                id = json.intOrNull("id"),
+                phoneNumber = phone
             )
         } catch (e: JSONException) {
             null
@@ -44,10 +48,17 @@ class SessionStore(context: Context) {
             .put("first_name", user.firstName)
             .put("last_name", user.lastName)
             .put("id", user.id ?: JSONObject.NULL)
+            .put("phone_number", user.phoneNumber)
         prefs.edit {
             putString(KEY_ACCESS, accessToken)
             putString(KEY_USER, json.toString())
         }
+    }
+
+    /** Replaces the stored user (e.g. after editing details), keeping the current token. */
+    fun saveUser(user: UserSession) {
+        val token = accessToken ?: return
+        saveSession(token, user)
     }
 
     fun clearSession() {

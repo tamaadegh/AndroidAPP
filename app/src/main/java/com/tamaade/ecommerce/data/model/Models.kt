@@ -101,14 +101,16 @@ data class CartLine(
         get() = (product.price.toDoubleOrNull() ?: 0.0) * quantity
 }
 
+/** [email] can be empty for accounts created with a phone number (and [phoneNumber] for email accounts). */
 data class UserSession(
     val email: String,
     val firstName: String,
     val lastName: String,
-    val id: Int? = null
+    val id: Int? = null,
+    val phoneNumber: String = ""
 ) {
     val displayName: String
-        get() = "$firstName $lastName".trim().ifBlank { email }
+        get() = "$firstName $lastName".trim().ifBlank { email.ifBlank { phoneNumber } }
 }
 
 /** Response of POST api/user/payments/hubtel/checkout/ */

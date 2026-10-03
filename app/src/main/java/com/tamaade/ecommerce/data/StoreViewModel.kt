@@ -1,12 +1,15 @@
 package com.tamaade.ecommerce.data
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tamaade.ecommerce.data.api.ApiException
+import com.tamaade.ecommerce.data.api.AuthResult
+import com.tamaade.ecommerce.data.api.OtpRequestResult
 import com.tamaade.ecommerce.data.api.TamaadeApi
 import com.tamaade.ecommerce.data.model.CartLine
 import com.tamaade.ecommerce.data.model.CheckoutState
@@ -46,6 +49,22 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     var authError by mutableStateOf<String?>(null)
         private set
 
+    /** The "code" of the last auth error (e.g. "not_registered"). */
+    var authErrorCode by mutableStateOf<String?>(null)
+        private set
+
+    /** Per-field messages of the last auth error (e.g. "password" for a too-weak sign-up password). */
+    var authFieldErrors by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /** Phone number (+233 form) whose SMS code can't be re-sent before [otpCooldownUntil]. */
+    var otpCooldownPhone by mutableStateOf<String?>(null)
+        private set
+
+    /** [SystemClock.elapsedRealtime] at which another code may be requested for [otpCooldownPhone]. */
+    var otpCooldownUntil by mutableStateOf(0L)
+        private set
+
     var checkoutState by mutableStateOf<CheckoutState>(
         session.pendingCheckoutRef?.let { CheckoutState.AwaitingPayment(it) } ?: CheckoutState.Idle
     )
@@ -55,6 +74,16 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     var deletingAccount by mutableStateOf(false)
+        private set
+
+    var savingProfile by mutableStateOf(false)
+        private set
+
+    var profileError by mutableStateOf<String?>(null)
+        private set
+
+    /** Per-field messages from PATCH api/user/ (first_name, last_name, email, phone_number). */
+    var profileFieldErrors by mutableStateOf<Map<String, String>>(emptyMap())
         private set
 
     var deleteAccountError by mutableStateOf<String?>(null)
@@ -159,48 +188,85 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAuthError() {
         authError = null
+        authErrorCode = null
+        authFieldErrors = emptyMap()
     }
 
     fun login(email: String, password: String, onSuccess: () -> Unit) {
+        signIn({ onSuccess() }) { TamaadeApi.login(email, password) }
+    }
+
+    /** POST api/user/otp/request/ — texts a 6-digit code to [phone] (+233 form). */
+    fun requestOtp(phone: String, onSent: (OtpRequestResult) -> Unit) {
         if (authLoading) return
         authLoading = true
-        authError = null
+        clearAuthError()
         viewModelScope.launch {
             try {
-                val result = TamaadeApi.login(email, password)
-                session.saveSession(result.accessToken, result.user)
-                user = result.user
-                onSuccess()
+                val result = TamaadeApi.requestOtp(phone)
+                startOtpCooldown(phone, result.resendIn)
+                if (result.phoneNumber != phone) startOtpCooldown(result.phoneNumber, result.resendIn)
+                onSent(result)
             } catch (e: ApiException) {
-                authError = e.message
+                onAuthFailed(e, phone)
             } finally {
                 authLoading = false
             }
         }
     }
 
-    /** Creates the account; the user must verify their email before they can sign in. */
+    /** POST api/user/otp/verify/ — signs in with the SMS code. */
+    fun verifyOtp(phone: String, code: String, onSuccess: () -> Unit) {
+        signIn({ onSuccess() }, phone) { TamaadeApi.verifyOtp(phone, code) }
+    }
+
+    /**
+     * POST api/user/register/ — creates the account (email and/or phone + password) and
+     * signs it in. Per-field server errors end up in [authFieldErrors].
+     */
     fun register(
-        email: String,
-        password: String,
-        confirmPassword: String,
         firstName: String,
         lastName: String,
-        onSuccess: (message: String) -> Unit
+        password: String,
+        email: String,
+        phone: String,
+        onSuccess: () -> Unit
     ) {
+        signIn({ onSuccess() }) {
+            TamaadeApi.register(firstName, lastName, password, email, phone)
+        }
+    }
+
+    private fun signIn(onSuccess: (AuthResult) -> Unit, phone: String? = null, call: suspend () -> AuthResult) {
         if (authLoading) return
         authLoading = true
-        authError = null
+        clearAuthError()
         viewModelScope.launch {
             try {
-                val message = TamaadeApi.register(email, password, confirmPassword, firstName, lastName)
-                onSuccess(message)
+                val result = call()
+                session.saveSession(result.accessToken, result.user)
+                user = result.user
+                otpCooldownPhone = null
+                onSuccess(result)
             } catch (e: ApiException) {
-                authError = e.message
+                onAuthFailed(e, phone)
             } finally {
                 authLoading = false
             }
         }
+    }
+
+    private fun onAuthFailed(e: ApiException, phone: String?) {
+        authError = e.message ?: "Something went wrong. Please try again."
+        authErrorCode = e.code
+        authFieldErrors = e.fieldErrors
+        val retryAfter = e.retryAfter
+        if (phone != null && e.status == 429 && retryAfter != null) startOtpCooldown(phone, retryAfter)
+    }
+
+    private fun startOtpCooldown(phone: String, seconds: Int) {
+        otpCooldownPhone = phone
+        otpCooldownUntil = SystemClock.elapsedRealtime() + seconds.coerceAtLeast(0) * 1_000L
     }
 
     fun logout() {
@@ -210,11 +276,56 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         checkoutState = CheckoutState.Idle
     }
 
+    fun clearProfileError() {
+        profileError = null
+        profileFieldErrors = emptyMap()
+    }
+
+    /**
+     * PATCH api/user/ with the edited names and contact details ([email]/[phone] "" removes it);
+     * on success the stored user is replaced with the server's copy.
+     */
+    fun updateProfile(
+        firstName: String,
+        lastName: String,
+        email: String,
+        phone: String,
+        onSaved: () -> Unit
+    ) {
+        val token = session.accessToken
+        if (token == null) {
+            eventChannel.trySend(StoreEvent.RequireLogin)
+            return
+        }
+        if (savingProfile) return
+        savingProfile = true
+        clearProfileError()
+        viewModelScope.launch {
+            try {
+                val updated = TamaadeApi.updateProfile(token, firstName, lastName, email, phone)
+                session.saveUser(updated)
+                user = updated
+                onSaved()
+            } catch (e: ApiException) {
+                if (e.isUnauthorized) {
+                    expireSession()
+                } else {
+                    profileError = e.message ?: "Couldn't save your details. Please try again."
+                    profileFieldErrors = e.fieldErrors
+                }
+            } finally {
+                savingProfile = false
+            }
+        }
+    }
+
     fun clearDeleteAccountError() {
         deleteAccountError = null
     }
 
-    /** POST api/user/delete-account/; on success wipes the session, basket and pending checkout. */
+    /**
+     * POST api/user/delete-account/; on success wipes the session, basket and pending checkout.
+     */
     fun deleteAccount(password: String, onDeleted: (message: String) -> Unit) {
         val token = session.accessToken
         if (token == null) {

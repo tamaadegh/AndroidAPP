@@ -44,10 +44,13 @@ import com.tamaade.ecommerce.ui.theme.Muted
 import com.tamaade.ecommerce.ui.theme.PageBackground
 import com.tamaade.ecommerce.ui.theme.White
 
-/** Google Play account deletion: POST api/user/delete-account/ with the user's password. */
+/**
+ * Google Play account deletion: POST api/user/delete-account/ with the user's password.
+ */
 @Composable
 fun DeleteAccountScreen(
     email: String?,
+    phoneNumber: String?,
     deleting: Boolean,
     error: String?,
     onClearError: () -> Unit,
@@ -108,7 +111,8 @@ fun DeleteAccountScreen(
             Text(
                 text = buildString {
                     append("This erases your account")
-                    if (!email.isNullOrBlank()) append(" (").append(email).append(")")
+                    val contact = email?.takeIf { it.isNotBlank() } ?: phoneNumber?.takeIf { it.isNotBlank() }
+                    if (contact != null) append(" (").append(contact).append(")")
                     append(" and the personal data linked to it, including your profile, ")
                     append("saved basket and delivery details. You will be signed out on this device. ")
                     append("This cannot be undone.")

@@ -47,6 +47,7 @@ import com.tamaade.ecommerce.ui.privacy.PrivacyScreen
 import com.tamaade.ecommerce.ui.product.ProductDetailScreen
 import com.tamaade.ecommerce.ui.product.ProductListScreen
 import com.tamaade.ecommerce.ui.profile.DeleteAccountScreen
+import com.tamaade.ecommerce.ui.profile.EditProfileScreen
 import com.tamaade.ecommerce.ui.profile.ProfileScreen
 import com.tamaade.ecommerce.ui.splash.SplashScreen
 import com.tamaade.ecommerce.ui.util.formatPrice
@@ -124,7 +125,7 @@ fun TamaadeApp(
                         scope.launch { snackbarHostState.showSnackbar("No browser found to open Hubtel checkout") }
                     }
                 }
-                StoreEvent.RequireLogin -> navController.navigate(Routes.Login) { launchSingleTop = true }
+                StoreEvent.RequireLogin -> navController.navigate(Routes.login()) { launchSingleTop = true }
                 StoreEvent.ShowCart -> showCart()
             }
         }
@@ -137,6 +138,16 @@ fun TamaadeApp(
 
     fun addProductById(id: Int) {
         catalog.data.productById(id)?.let { addProduct(it) }
+    }
+
+    /** Leaves the auth screens (Login and any Sign up on top of it) back to where the user came from. */
+    fun onSignedIn(message: String) {
+        val route = navController.currentDestination?.route
+        if (route == Routes.Login || route == Routes.SignUp) {
+            if (!navController.popBackStack(Routes.Login, inclusive = true)) navController.popBackStack()
+            if (navController.currentDestination?.route == Routes.SignUp) navController.popBackStack()
+        }
+        scope.launch { snackbarHostState.showSnackbar(message) }
     }
 
     Scaffold(
@@ -245,7 +256,7 @@ fun TamaadeApp(
             composable(TopLevelDestination.Profile.route) {
                 ProfileScreen(
                     user = store.user,
-                    onLogin = { navController.navigate(Routes.Login) },
+                    onLogin = { navController.navigate(Routes.login()) },
                     onLogout = {
                         store.logout()
                         scope.launch { snackbarHostState.showSnackbar("Signed out") }
@@ -259,7 +270,32 @@ fun TamaadeApp(
                     musicEnabled = store.musicEnabled,
                     onMusicEnabledChange = store::updateMusicEnabled,
                     onOpenPrivacy = { navController.navigate(Routes.Privacy) },
-                    onDeleteAccount = { navController.navigate(Routes.DeleteAccount) }
+                    onDeleteAccount = { navController.navigate(Routes.DeleteAccount) },
+                    onEditDetails = { navController.navigate(Routes.EditProfile) }
+                )
+            }
+
+            composable(Routes.EditProfile) {
+                LaunchedEffect(Unit) { store.clearProfileError() }
+                val signedIn = store.user
+                if (signedIn == null) {
+                    // Signed out (e.g. session expired) while on this screen.
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    return@composable
+                }
+                EditProfileScreen(
+                    user = signedIn,
+                    saving = store.savingProfile,
+                    error = store.profileError,
+                    fieldErrors = store.profileFieldErrors,
+                    onClearError = store::clearProfileError,
+                    onSave = { firstName, lastName, email, phone ->
+                        store.updateProfile(firstName, lastName, email, phone) {
+                            navController.popBackStack()
+                            scope.launch { snackbarHostState.showSnackbar("Details updated") }
+                        }
+                    },
+                    onBack = { navController.popBackStack() }
                 )
             }
 
@@ -267,6 +303,7 @@ fun TamaadeApp(
                 LaunchedEffect(Unit) { store.clearDeleteAccountError() }
                 DeleteAccountScreen(
                     email = store.user?.email,
+                    phoneNumber = store.user?.phoneNumber,
                     deleting = store.deletingAccount,
                     error = store.deleteAccountError,
                     onClearError = store::clearDeleteAccountError,
@@ -347,46 +384,67 @@ fun TamaadeApp(
                 )
             }
 
-            composable(Routes.Login) {
+            composable(
+                route = Routes.Login,
+                arguments = listOf(
+                    navArgument("phone") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { entry ->
                 LaunchedEffect(Unit) { store.clearAuthError() }
                 LoginScreen(
                     loading = store.authLoading,
                     error = store.authError,
+                    errorCode = store.authErrorCode,
+                    initialPhone = entry.arguments?.getString("phone").orEmpty(),
+                    otpCooldownPhone = store.otpCooldownPhone,
+                    otpCooldownUntil = store.otpCooldownUntil,
                     onBack = { navController.popBackStack() },
                     onSubmit = { email, password ->
-                        store.login(email, password) {
-                            navController.popBackStack()
-                            scope.launch { snackbarHostState.showSnackbar("Signed in") }
-                        }
+                        store.login(email, password) { onSignedIn("Signed in") }
+                    },
+                    onRequestCode = { phone, onSent ->
+                        store.requestOtp(phone) { onSent(it.phoneNumber) }
+                    },
+                    onVerifyCode = { phone, code ->
+                        store.verifyOtp(phone, code) { onSignedIn("Signed in") }
                     },
                     onClearError = store::clearAuthError,
-                    onSignUp = { navController.navigate(Routes.SignUp) }
+                    onSignUp = { phone ->
+                        navController.navigate(Routes.signUp(phone)) {
+                            popUpTo(Routes.SignUp) { inclusive = true }
+                        }
+                    }
                 )
             }
 
-            composable(Routes.SignUp) {
+            composable(
+                route = Routes.SignUp,
+                arguments = listOf(
+                    navArgument("phone") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { entry ->
                 LaunchedEffect(Unit) { store.clearAuthError() }
                 SignUpScreen(
                     loading = store.authLoading,
                     error = store.authError,
+                    fieldErrors = store.authFieldErrors,
+                    initialPhone = entry.arguments?.getString("phone").orEmpty(),
                     onBack = { navController.popBackStack() },
-                    onSubmit = { email, password, confirmPassword, firstName, lastName ->
-                        store.register(email, password, confirmPassword, firstName, lastName) { message ->
-                            // The account must verify its email first, so send them to Login (no session until verified).
-                            navController.navigate(Routes.Login) {
-                                popUpTo(Routes.SignUp) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                            scope.launch {
-                                snackbarHostState.showSnackbar("$message Verify your email, then sign in.")
-                            }
+                    onSubmit = { firstName, lastName, email, phone, password ->
+                        store.register(firstName, lastName, password, email, phone) {
+                            onSignedIn("Account created — welcome to Tamaade!")
                         }
                     },
                     onClearError = store::clearAuthError,
-                    onSignIn = {
-                        navController.navigate(Routes.Login) {
-                            popUpTo(Routes.SignUp) { inclusive = true }
-                            launchSingleTop = true
+                    onSignIn = { phone ->
+                        navController.navigate(Routes.login(phone)) {
+                            popUpTo(Routes.Login) { inclusive = true }
                         }
                     },
                     onOpenPrivacy = { navController.navigate(Routes.Privacy) }

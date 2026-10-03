@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -57,7 +58,8 @@ fun ProfileScreen(
     musicEnabled: Boolean,
     onMusicEnabledChange: (Boolean) -> Unit,
     onOpenPrivacy: () -> Unit,
-    onDeleteAccount: () -> Unit
+    onDeleteAccount: () -> Unit,
+    onEditDetails: () -> Unit = {}
 ) {
     val links = listOf(
         ProfileLink("My basket", Icons.Outlined.ShoppingCart),
@@ -101,11 +103,15 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = user.email,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            listOf(user.phoneNumber, user.email)
+                                .filter { it.isNotBlank() && it != user.displayName }
+                                .forEach { contact ->
+                                    Text(
+                                        text = contact,
+                                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
                         } else {
                             Text(
                                 text = "Welcome to Tamaade",
@@ -235,6 +241,38 @@ fun ProfileScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp)
                 )
+            }
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onEditDetails)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Edit, contentDescription = null, tint = BrandGreen)
+                        Spacer(Modifier.size(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "Edit my details", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = "Name, email and phone number",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Muted
+                            )
+                        }
+                        Icon(
+                            Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             item {
                 Card(

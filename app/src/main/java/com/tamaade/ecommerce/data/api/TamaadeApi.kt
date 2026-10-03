@@ -26,8 +26,19 @@ import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 
-/** A failed API call. [status] is the HTTP code, or 0 when the server could not be reached. */
-class ApiException(message: String, val status: Int) : Exception(message) {
+/**
+ * A failed API call. [status] is the HTTP code, or 0 when the server could not be reached.
+ * [code] is the machine-readable "code" field of the error body (e.g. "not_registered"),
+ * [retryAfter] the "retry_after" seconds of a 429 and [fieldErrors] the per-field messages of
+ * an {"errors": {"password": [...]}} body, when the server sent them.
+ */
+class ApiException(
+    message: String,
+    val status: Int,
+    val code: String? = null,
+    val retryAfter: Int? = null,
+    val fieldErrors: Map<String, String> = emptyMap()
+) : Exception(message) {
     val isUnauthorized: Boolean
         get() = status == 401
 }
@@ -35,6 +46,14 @@ class ApiException(message: String, val status: Int) : Exception(message) {
 data class AuthResult(
     val accessToken: String,
     val user: UserSession
+)
+
+/** Response of POST api/user/otp/request/ ([phoneNumber] is the server's +233 form). */
+data class OtpRequestResult(
+    val phoneNumber: String,
+    val expiresIn: Int,
+    val resendIn: Int,
+    val message: String
 )
 
 /**
@@ -52,41 +71,107 @@ object TamaadeApi {
                 .put("email", email)
                 .put("password", password)
         )
+        return parseAuthResult(json, fallbackEmail = email)
+    }
+
+    /**
+     * Creates the account and signs it in straight away. At least one of [email] and
+     * [phoneNumber] is required; empty optional fields are left out of the body.
+     */
+    suspend fun register(
+        firstName: String,
+        lastName: String,
+        password: String,
+        email: String?,
+        phoneNumber: String?
+    ): AuthResult {
+        val body = JSONObject()
+            .put("first_name", firstName)
+            .put("last_name", lastName)
+            .put("password", password)
+        if (!email.isNullOrBlank()) body.put("email", email)
+        if (!phoneNumber.isNullOrBlank()) body.put("phone_number", phoneNumber)
+        val json = request(method = "POST", path = "api/user/register/", body = body)
+        return parseAuthResult(json, fallbackEmail = email.orEmpty(), fallbackPhone = phoneNumber.orEmpty())
+    }
+
+    /** Sends a sign-in SMS code to a Ghana mobile number (0XXXXXXXXX or +233XXXXXXXXX). */
+    suspend fun requestOtp(phoneNumber: String): OtpRequestResult {
+        val json = request(
+            method = "POST",
+            path = "api/user/otp/request/",
+            body = JSONObject()
+                .put("phone_number", phoneNumber)
+                .put("purpose", "login")
+        )
+        return OtpRequestResult(
+            phoneNumber = json.stringOrNull("phone_number") ?: phoneNumber,
+            expiresIn = json.intOrNull("expires_in") ?: 600,
+            resendIn = json.intOrNull("resend_in") ?: 60,
+            message = json.stringOrNull("detail") ?: "Code sent."
+        )
+    }
+
+    /** Verifies a sign-in SMS code; the response signs the user in. */
+    suspend fun verifyOtp(phoneNumber: String, code: String): AuthResult {
+        val json = request(
+            method = "POST",
+            path = "api/user/otp/verify/",
+            body = JSONObject()
+                .put("phone_number", phoneNumber)
+                .put("code", code)
+                .put("purpose", "login")
+        )
+        return parseAuthResult(json, fallbackPhone = phoneNumber)
+    }
+
+    private fun parseAuthResult(
+        json: JSONObject,
+        fallbackEmail: String = "",
+        fallbackPhone: String = ""
+    ): AuthResult {
         val access = json.stringOrNull("access")
             ?: json.stringOrNull("access_token")
             ?: json.stringOrNull("key")
             ?: throw ApiException("Sign in failed. Please try again.", 200)
-        val user = json.optJSONObject("user")
         return AuthResult(
             accessToken = access,
-            user = UserSession(
-                email = user?.stringOrNull("email") ?: email,
-                firstName = user?.stringOrNull("first_name").orEmpty(),
-                lastName = user?.stringOrNull("last_name").orEmpty(),
-                id = user?.intOrNull("pk") ?: user?.intOrNull("id")
-            )
+            user = parseUser(json.optJSONObject("user"), fallbackEmail, fallbackPhone)
         )
     }
 
-    /** Returns the server's confirmation message (the account still has to verify its email). */
-    suspend fun register(
-        email: String,
-        password: String,
-        confirmPassword: String,
+    private fun parseUser(user: JSONObject?, fallbackEmail: String = "", fallbackPhone: String = "") =
+        UserSession(
+            email = user?.stringOrNull("email") ?: fallbackEmail,
+            firstName = user?.stringOrNull("first_name").orEmpty(),
+            lastName = user?.stringOrNull("last_name").orEmpty(),
+            id = user?.intOrNull("pk") ?: user?.intOrNull("id"),
+            phoneNumber = user?.stringOrNull("phone_number") ?: fallbackPhone
+        )
+
+    /**
+     * PATCH api/user/ — updates the signed-in user's names and contact details and returns
+     * the updated user. An empty [email] or [phoneNumber] removes it (at least one must remain).
+     */
+    suspend fun updateProfile(
+        token: String,
         firstName: String,
-        lastName: String
-    ): String {
+        lastName: String,
+        email: String,
+        phoneNumber: String
+    ): UserSession {
         val json = request(
-            method = "POST",
-            path = "api/user/register/",
+            method = "PATCH",
+            path = "api/user/",
             body = JSONObject()
-                .put("email", email)
-                .put("password1", password)
-                .put("password2", confirmPassword)
                 .put("first_name", firstName)
                 .put("last_name", lastName)
+                .put("email", email)
+                .put("phone_number", phoneNumber),
+            token = token
         )
-        return json.stringOrNull("detail") ?: "Verification e-mail sent."
+        // The endpoint returns the user object itself; also accept a {"user": {...}} wrapper.
+        return parseUser(json.optJSONObject("user") ?: json)
     }
 
     suspend fun startHubtelCheckout(token: String, lines: List<CartLine>): HubtelCheckout {
@@ -374,7 +459,18 @@ object TamaadeApi {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             val json = parseJson(text)
-            if (code !in 200..299) throw ApiException(errorMessage(json, code), code)
+            if (code !in 200..299) {
+                val error = json as? JSONObject
+                val retryAfter = error?.intOrNull("retry_after")
+                    ?: connection.getHeaderField("Retry-After")?.trim()?.toIntOrNull()
+                throw ApiException(
+                    message = errorMessage(json, code),
+                    status = code,
+                    code = error?.stringOrNull("code"),
+                    retryAfter = retryAfter,
+                    fieldErrors = fieldErrors(error?.optJSONObject("errors"))
+                )
+            }
             json
         } catch (e: SocketTimeoutException) {
             throw ApiException("Tamaade is taking too long to respond. Please try again.", 0)
@@ -405,8 +501,10 @@ object TamaadeApi {
         val json = body as? JSONObject
         if (json != null) {
             json.stringOrNull("detail")?.let { if (it.isNotBlank()) return it }
+            fieldErrors(json.optJSONObject("errors")).values.joinToString("\n")
+                .let { if (it.isNotBlank()) return it }
             json.optJSONArray("non_field_errors")?.joined()?.let { if (it.isNotBlank()) return it }
-            val messages = json.keys().asSequence().mapNotNull { key ->
+            val messages = json.keys().asSequence().filter { it !in META_KEYS }.mapNotNull { key ->
                 val text = when (val value = json.opt(key)) {
                     is JSONArray -> value.joined()
                     is String -> value
@@ -423,15 +521,28 @@ object TamaadeApi {
         }
     }
 
-    private fun fieldLabel(key: String): String = when (key) {
-        "password1" -> "Password"
-        "password2" -> "Confirm password"
-        else -> key.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    /** {"password": ["Too short.", "Too common."]} -> {"password": "Too short. Too common."} */
+    private fun fieldErrors(errors: JSONObject?): Map<String, String> {
+        if (errors == null) return emptyMap()
+        return errors.keys().asSequence().mapNotNull { key ->
+            val text = when (val value = errors.opt(key)) {
+                is JSONArray -> value.joined()
+                is String -> value
+                else -> null
+            }
+            if (text.isNullOrBlank()) null else key to text
+        }.toMap()
     }
+
+    private fun fieldLabel(key: String): String =
+        key.replace('_', ' ').replaceFirstChar { it.uppercase() }
 
     private fun JSONArray.joined(): String =
         (0 until length()).mapNotNull { i -> opt(i)?.toString()?.takeIf { it.isNotBlank() } }
             .joinToString(" ")
+
+    /** Machine-readable error fields that are not messages for the user. */
+    private val META_KEYS = setOf("code", "retry_after", "errors")
 
     private const val OFFLINE_MESSAGE = "Can't reach Tamaade. Check your internet connection and try again."
 }

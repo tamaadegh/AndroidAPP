@@ -22,12 +22,18 @@ object Routes {
     const val Splash = "splash"
     const val ProductDetail = "product/{productId}"
     const val ProductList = "product_list?category={category}&maxPrice={maxPrice}&q={q}&sort={sort}"
-    const val Login = "login"
-    const val SignUp = "signup"
+    /** Optional ?phone= prefills the phone number (e.g. "Create an account" for an unknown number). */
+    const val Login = "login?phone={phone}"
+    const val SignUp = "signup?phone={phone}"
     const val Privacy = "privacy"
     const val DeleteAccount = "delete_account"
+    const val EditProfile = "edit_profile"
 
     fun productDetail(id: Int) = "product/$id"
+
+    fun login(phone: String = "") = "login?phone=${Uri.encode(phone)}"
+
+    fun signUp(phone: String = "") = "signup?phone=${Uri.encode(phone)}"
 
     /** Arguments are URL-encoded so names like "Home & Kitchen" survive the route. */
     fun productList(
