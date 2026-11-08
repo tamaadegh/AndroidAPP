@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -31,6 +30,7 @@ import com.tamaade.ecommerce.data.filterProducts
 import com.tamaade.ecommerce.data.model.Product
 import com.tamaade.ecommerce.data.StoreEvent
 import com.tamaade.ecommerce.data.StoreViewModel
+import com.tamaade.ecommerce.ui.auth.ForgotPasswordScreen
 import com.tamaade.ecommerce.ui.auth.LoginScreen
 import com.tamaade.ecommerce.ui.auth.SignUpScreen
 import com.tamaade.ecommerce.ui.cart.CartScreen
@@ -143,7 +143,10 @@ fun TamaadeApp(
     /** Leaves the auth screens (Login and any Sign up on top of it) back to where the user came from. */
     fun onSignedIn(message: String) {
         val route = navController.currentDestination?.route
-        if (route == Routes.Login || route == Routes.SignUp) {
+        if (route == Routes.ForgotPassword) {
+            navController.popBackStack()
+            if (navController.currentDestination?.route == Routes.Login) navController.popBackStack()
+        } else if (route == Routes.Login || route == Routes.SignUp) {
             if (!navController.popBackStack(Routes.Login, inclusive = true)) navController.popBackStack()
             if (navController.currentDestination?.route == Routes.SignUp) navController.popBackStack()
         }
@@ -316,6 +319,9 @@ fun TamaadeApp(
                             scope.launch { snackbarHostState.showSnackbar(message) }
                         }
                     },
+                    onForgotPassword = {
+                        navController.navigate(Routes.forgotPassword(store.user?.phoneNumber.orEmpty()))
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -326,8 +332,9 @@ fun TamaadeApp(
             ) { entry ->
                 val id = entry.arguments?.getInt("productId") ?: return@composable
                 var fetching by remember(id) { mutableStateOf(true) }
-                val product by produceState(catalog.data.productById(id), id, catalog.productsVersion) {
-                    if (value == null) value = catalog.findProduct(id)
+                var product by remember(id) { mutableStateOf(catalog.data.productById(id)) }
+                LaunchedEffect(id, catalog.productsVersion) {
+                    if (product == null) product = catalog.findProduct(id)
                     fetching = false
                 }
                 ProductDetailScreen(
@@ -416,7 +423,38 @@ fun TamaadeApp(
                         navController.navigate(Routes.signUp(phone)) {
                             popUpTo(Routes.SignUp) { inclusive = true }
                         }
+                    },
+                    onForgotPassword = { phone -> navController.navigate(Routes.forgotPassword(phone)) }
+                )
+            }
+
+            composable(
+                route = Routes.ForgotPassword,
+                arguments = listOf(
+                    navArgument("phone") {
+                        type = NavType.StringType
+                        defaultValue = ""
                     }
+                )
+            ) { entry ->
+                LaunchedEffect(Unit) { store.clearAuthError() }
+                ForgotPasswordScreen(
+                    loading = store.authLoading,
+                    error = store.authError,
+                    fieldErrors = store.authFieldErrors,
+                    initialPhone = entry.arguments?.getString("phone").orEmpty(),
+                    otpCooldownPhone = store.otpCooldownPhone,
+                    otpCooldownUntil = store.otpCooldownUntil,
+                    onRequestCode = { phone, onSent ->
+                        store.requestPasswordReset(phone) { onSent(it.phoneNumber) }
+                    },
+                    onReset = { phone, code, newPassword ->
+                        store.confirmPasswordReset(phone, code, newPassword) {
+                            onSignedIn("Password updated — you're signed in")
+                        }
+                    },
+                    onClearError = store::clearAuthError,
+                    onBack = { navController.popBackStack() }
                 )
             }
 

@@ -25,6 +25,7 @@ object Routes {
     /** Optional ?phone= prefills the phone number (e.g. "Create an account" for an unknown number). */
     const val Login = "login?phone={phone}"
     const val SignUp = "signup?phone={phone}"
+    const val ForgotPassword = "forgot_password?phone={phone}"
     const val Privacy = "privacy"
     const val DeleteAccount = "delete_account"
     const val EditProfile = "edit_profile"
@@ -34,6 +35,8 @@ object Routes {
     fun login(phone: String = "") = "login?phone=${Uri.encode(phone)}"
 
     fun signUp(phone: String = "") = "signup?phone=${Uri.encode(phone)}"
+
+    fun forgotPassword(phone: String = "") = "forgot_password?phone=${Uri.encode(phone)}"
 
     /** Arguments are URL-encoded so names like "Home & Kitchen" survive the route. */
     fun productList(

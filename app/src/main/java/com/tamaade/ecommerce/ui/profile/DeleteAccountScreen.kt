@@ -55,6 +55,7 @@ fun DeleteAccountScreen(
     error: String?,
     onClearError: () -> Unit,
     onConfirm: (password: String) -> Unit,
+    onForgotPassword: () -> Unit,
     onBack: () -> Unit
 ) {
     var password by remember { mutableStateOf("") }
@@ -142,7 +143,14 @@ fun DeleteAccountScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
-            Spacer(Modifier.height(24.dp))
+            TextButton(
+                onClick = onForgotPassword,
+                enabled = !deleting,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Forgot password?", color = BrandGreen)
+            }
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
                     if (password.isBlank()) localError = "Enter your password"

@@ -62,7 +62,8 @@ fun LoginScreen(
     onRequestCode: (phone: String, onSent: (sentTo: String) -> Unit) -> Unit,
     onVerifyCode: (phone: String, code: String) -> Unit,
     onClearError: () -> Unit,
-    onSignUp: (phone: String) -> Unit = {}
+    onSignUp: (phone: String) -> Unit = {},
+    onForgotPassword: (phone: String) -> Unit = {}
 ) {
     var useEmail by rememberSaveable { mutableStateOf(false) }
     var phone by rememberSaveable(initialPhone) { mutableStateOf(initialPhone) }
@@ -138,7 +139,13 @@ fun LoginScreen(
                     trailingIcon = { PasswordToggle(showPassword) { showPassword = !showPassword } },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
-                Spacer(Modifier.height(16.dp))
+                TextButton(
+                    onClick = { edited(); onForgotPassword("") },
+                    enabled = !loading,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Forgot password?", color = BrandGreen)
+                }
                 AuthErrorBlock(shownError)
                 PrimaryBrandButton(
                     text = if (loading) "Signing in…" else "Sign In",

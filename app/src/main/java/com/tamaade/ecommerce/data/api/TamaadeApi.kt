@@ -45,7 +45,15 @@ class ApiException(
 
 data class AuthResult(
     val accessToken: String,
+    /** Long-lived token used to get a new [accessToken] when it expires (null if the server sent none). */
+    val refreshToken: String?,
     val user: UserSession
+)
+
+/** Response of POST api/user/token/refresh/ ([refreshToken] is set only when the server rotates it). */
+data class RefreshedTokens(
+    val accessToken: String,
+    val refreshToken: String?
 )
 
 /** Response of POST api/user/otp/request/ ([phoneNumber] is the server's +233 form). */
@@ -125,6 +133,46 @@ object TamaadeApi {
         return parseAuthResult(json, fallbackPhone = phoneNumber)
     }
 
+    /** Trades the refresh token for a new access token. A 401 means the refresh token is dead too. */
+    suspend fun refreshTokens(refreshToken: String): RefreshedTokens {
+        val json = request(
+            method = "POST",
+            path = "api/user/token/refresh/",
+            body = JSONObject().put("refresh", refreshToken)
+        )
+        val access = json.stringOrNull("access")
+            ?: throw ApiException("Your session has expired. Please sign in again.", 401)
+        return RefreshedTokens(accessToken = access, refreshToken = json.stringOrNull("refresh"))
+    }
+
+    /** Forgotten password: texts a reset code to the account's Ghana mobile number. */
+    suspend fun requestPasswordReset(phoneNumber: String): OtpRequestResult {
+        val json = request(
+            method = "POST",
+            path = "api/user/password/reset/otp/request/",
+            body = JSONObject().put("phone_number", phoneNumber)
+        )
+        return OtpRequestResult(
+            phoneNumber = json.stringOrNull("phone_number") ?: phoneNumber,
+            expiresIn = json.intOrNull("expires_in") ?: 600,
+            resendIn = json.intOrNull("resend_in") ?: 60,
+            message = json.stringOrNull("detail") ?: "Code sent."
+        )
+    }
+
+    /** Forgotten password: checks the SMS code, sets [newPassword] and signs the user in. */
+    suspend fun confirmPasswordReset(phoneNumber: String, code: String, newPassword: String): AuthResult {
+        val json = request(
+            method = "POST",
+            path = "api/user/password/reset/otp/confirm/",
+            body = JSONObject()
+                .put("phone_number", phoneNumber)
+                .put("code", code)
+                .put("new_password", newPassword)
+        )
+        return parseAuthResult(json, fallbackPhone = phoneNumber)
+    }
+
     private fun parseAuthResult(
         json: JSONObject,
         fallbackEmail: String = "",
@@ -136,6 +184,8 @@ object TamaadeApi {
             ?: throw ApiException("Sign in failed. Please try again.", 200)
         return AuthResult(
             accessToken = access,
+            // OTP/register/reset send "refresh"; the e-mail login (dj-rest-auth) sends "refresh_token".
+            refreshToken = json.stringOrNull("refresh") ?: json.stringOrNull("refresh_token"),
             user = parseUser(json.optJSONObject("user"), fallbackEmail, fallbackPhone)
         )
     }

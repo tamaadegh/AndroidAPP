@@ -62,7 +62,10 @@ android {
             // Release is HTTPS-only.
             manifestPlaceholders["usesCleartextTraffic"] = "false"
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
+            // R8: smaller APK/AAB. Upload app/build/outputs/mapping/release/mapping.txt to
+            // Play Console (or let Play read it from the bundle) to keep crash stack traces readable.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

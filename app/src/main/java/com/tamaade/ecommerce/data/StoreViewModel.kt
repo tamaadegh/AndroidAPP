@@ -21,6 +21,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** One-off things the UI should do in response to the store (snackbars, navigation, opening the browser). */
 sealed interface StoreEvent {
@@ -90,6 +92,9 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     private var verifyJob: Job? = null
+
+    /** One token refresh at a time, so parallel 401s don't each spend the refresh token. */
+    private val refreshMutex = Mutex()
 
     val cartCount: Int
         get() = cartLines.sumOf { it.quantity }
@@ -196,14 +201,28 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         signIn({ onSuccess() }) { TamaadeApi.login(email, password) }
     }
 
-    /** POST api/user/otp/request/ — texts a 6-digit code to [phone] (+233 form). */
+    /** POST api/user/otp/request/ — texts a 6-digit sign-in code to [phone] (+233 form). */
     fun requestOtp(phone: String, onSent: (OtpRequestResult) -> Unit) {
+        sendCode(phone, onSent) { TamaadeApi.requestOtp(phone) }
+    }
+
+    /** Forgotten password, step 1: texts a reset code to [phone] (+233 form). */
+    fun requestPasswordReset(phone: String, onSent: (OtpRequestResult) -> Unit) {
+        sendCode(phone, onSent) { TamaadeApi.requestPasswordReset(phone) }
+    }
+
+    /** Forgotten password, step 2: sets [newPassword] with the SMS [code] and signs the user in. */
+    fun confirmPasswordReset(phone: String, code: String, newPassword: String, onSuccess: () -> Unit) {
+        signIn({ onSuccess() }, phone) { TamaadeApi.confirmPasswordReset(phone, code, newPassword) }
+    }
+
+    private fun sendCode(phone: String, onSent: (OtpRequestResult) -> Unit, call: suspend () -> OtpRequestResult) {
         if (authLoading) return
         authLoading = true
         clearAuthError()
         viewModelScope.launch {
             try {
-                val result = TamaadeApi.requestOtp(phone)
+                val result = call()
                 startOtpCooldown(phone, result.resendIn)
                 if (result.phoneNumber != phone) startOtpCooldown(result.phoneNumber, result.resendIn)
                 onSent(result)
@@ -244,7 +263,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val result = call()
-                session.saveSession(result.accessToken, result.user)
+                session.saveSession(result.accessToken, result.refreshToken, result.user)
                 user = result.user
                 otpCooldownPhone = null
                 onSuccess(result)
@@ -292,8 +311,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         phone: String,
         onSaved: () -> Unit
     ) {
-        val token = session.accessToken
-        if (token == null) {
+        if (session.accessToken == null) {
             eventChannel.trySend(StoreEvent.RequireLogin)
             return
         }
@@ -302,7 +320,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         clearProfileError()
         viewModelScope.launch {
             try {
-                val updated = TamaadeApi.updateProfile(token, firstName, lastName, email, phone)
+                val updated = authorized { token -> TamaadeApi.updateProfile(token, firstName, lastName, email, phone) }
                 session.saveUser(updated)
                 user = updated
                 onSaved()
@@ -327,8 +345,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
      * POST api/user/delete-account/; on success wipes the session, basket and pending checkout.
      */
     fun deleteAccount(password: String, onDeleted: (message: String) -> Unit) {
-        val token = session.accessToken
-        if (token == null) {
+        if (session.accessToken == null) {
             eventChannel.trySend(StoreEvent.RequireLogin)
             return
         }
@@ -337,7 +354,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         deleteAccountError = null
         viewModelScope.launch {
             try {
-                val message = TamaadeApi.deleteAccount(token, password)
+                val message = authorized { token -> TamaadeApi.deleteAccount(token, password) }
                 logout()
                 cartLines = emptyList()
                 session.saveCart(emptyList())
@@ -348,6 +365,41 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 deletingAccount = false
             }
+        }
+    }
+
+    /**
+     * Runs an authenticated call. On a 401 the access token is refreshed once with the stored
+     * refresh token and the call retried; if that fails too the original 401 is rethrown
+     * (callers then sign the user out).
+     */
+    private suspend fun <T> authorized(call: suspend (token: String) -> T): T {
+        val token = session.accessToken ?: throw ApiException("Please sign in.", 401)
+        return try {
+            call(token)
+        } catch (e: ApiException) {
+            if (!e.isUnauthorized) throw e
+            val fresh = refreshAccessToken(expired = token) ?: throw e
+            call(fresh)
+        }
+    }
+
+    /** New access token, or null when there is no usable refresh token (the session is over). */
+    private suspend fun refreshAccessToken(expired: String): String? = refreshMutex.withLock {
+        val current = session.accessToken ?: return@withLock null
+        // Another call refreshed while this one waited for the lock.
+        if (current != expired) return@withLock current
+        val refresh = session.refreshToken ?: return@withLock null
+        try {
+            val tokens = TamaadeApi.refreshTokens(refresh)
+            // Signed out (or into another account) while the refresh was in flight.
+            if (session.refreshToken != refresh) return@withLock null
+            session.updateTokens(tokens.accessToken, tokens.refreshToken)
+            tokens.accessToken
+        } catch (e: ApiException) {
+            // 401/400: the refresh token expired or was revoked. Network errors bubble up
+            // so a flaky connection doesn't sign the user out.
+            if (e.status == 401 || e.status == 400) null else throw e
         }
     }
 
@@ -362,8 +414,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     // region Hubtel checkout
 
     fun startCheckout() {
-        val token = session.accessToken
-        if (user == null || token == null) {
+        if (user == null || session.accessToken == null) {
             eventChannel.trySend(StoreEvent.RequireLogin)
             return
         }
@@ -372,7 +423,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
         checkoutState = CheckoutState.Starting
         viewModelScope.launch {
             try {
-                val checkout = TamaadeApi.startHubtelCheckout(token, cartLines)
+                val lines = cartLines
+                val checkout = authorized { token -> TamaadeApi.startHubtelCheckout(token, lines) }
                 session.pendingCheckoutRef = checkout.clientReference
                 checkoutState = CheckoutState.AwaitingPayment(checkout.clientReference)
                 eventChannel.send(StoreEvent.OpenUrl(checkout.checkoutUrl))
@@ -424,8 +476,7 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             if (!force) return
             verifyJob?.cancel()
         }
-        val token = session.accessToken
-        if (token == null) {
+        if (session.accessToken == null) {
             eventChannel.trySend(StoreEvent.RequireLogin)
             return
         }
@@ -438,10 +489,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 // Hubtel's callback to the backend can lag a few seconds behind the browser redirect.
                 var attempts = if (reportedSuccess) 4 else 1
-                var status = TamaadeApi.hubtelStatus(token, reference)
+                var status = authorized { token -> TamaadeApi.hubtelStatus(token, reference) }
                 while (!status.paid && status.status == "P" && --attempts > 0) {
                     delay(2_500)
-                    status = TamaadeApi.hubtelStatus(token, reference)
+                    status = authorized { token -> TamaadeApi.hubtelStatus(token, reference) }
                 }
 
                 when {

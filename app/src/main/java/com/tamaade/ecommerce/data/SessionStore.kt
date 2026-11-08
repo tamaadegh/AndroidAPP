@@ -22,6 +22,17 @@ class SessionStore(context: Context) {
     val accessToken: String?
         get() = prefs.getString(KEY_ACCESS, null)
 
+    val refreshToken: String?
+        get() = prefs.getString(KEY_REFRESH, null)
+
+    /** Stores a refreshed access token (and the new refresh token when the server rotated it). */
+    fun updateTokens(accessToken: String, refreshToken: String?) {
+        prefs.edit {
+            putString(KEY_ACCESS, accessToken)
+            if (refreshToken != null) putString(KEY_REFRESH, refreshToken)
+        }
+    }
+
     fun loadUser(): UserSession? {
         if (accessToken == null) return null
         val raw = prefs.getString(KEY_USER, null) ?: return null
@@ -42,7 +53,7 @@ class SessionStore(context: Context) {
         }
     }
 
-    fun saveSession(accessToken: String, user: UserSession) {
+    fun saveSession(accessToken: String, refreshToken: String?, user: UserSession) {
         val json = JSONObject()
             .put("email", user.email)
             .put("first_name", user.firstName)
@@ -51,6 +62,7 @@ class SessionStore(context: Context) {
             .put("phone_number", user.phoneNumber)
         prefs.edit {
             putString(KEY_ACCESS, accessToken)
+            if (refreshToken != null) putString(KEY_REFRESH, refreshToken) else remove(KEY_REFRESH)
             putString(KEY_USER, json.toString())
         }
     }
@@ -58,12 +70,13 @@ class SessionStore(context: Context) {
     /** Replaces the stored user (e.g. after editing details), keeping the current token. */
     fun saveUser(user: UserSession) {
         val token = accessToken ?: return
-        saveSession(token, user)
+        saveSession(token, refreshToken, user)
     }
 
     fun clearSession() {
         prefs.edit {
             remove(KEY_ACCESS)
+            remove(KEY_REFRESH)
             remove(KEY_USER)
             remove(KEY_PENDING_REF)
         }
@@ -110,6 +123,7 @@ class SessionStore(context: Context) {
 
     private companion object {
         const val KEY_ACCESS = "access_token"
+        const val KEY_REFRESH = "refresh_token"
         const val KEY_USER = "user"
         const val KEY_PENDING_REF = "pending_checkout_ref"
         const val KEY_MUSIC = "background_music_enabled"
