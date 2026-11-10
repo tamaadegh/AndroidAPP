@@ -1,0 +1,5 @@
+// Shared by Debug and Release. Per-configuration values live in Debug.xcconfig /
+// Release.xcconfig; machine-specific overrides in Local.xcconfig (gitignored).
+//
+// xcconfig treats `//` as a comment, so URLs are written `https:/$()/host` -
+// the empty `$()` expands to nothing and keeps the double slash intact.

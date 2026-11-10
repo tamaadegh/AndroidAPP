@@ -1,34 +1,33 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-*.apk
-*.ap_
-*.aab
-*.dex
-*.class
-bin/
-gen/
-out/
-.navigation/
-captures/
-output.json
-*.log
-*.hprof
-.kotlin/
+# Xcode user state and build output
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+.swiftpm/
 
-# Release signing — never commit these
-/keystore.properties
-/playstoreK/
+# Machine-specific config (local backend URL)
+Config/Local.xcconfig
+
+# Signing material and App Store keys - never commit
+*.p12
+*.p8
+*.mobileprovision
+*.cer
 *.jks
-*.keystore
+AuthKey_*.p8
 
-# Build outputs and editor folders
-/app/build/
-/app/release/
-.cursor/
+# Local tooling state
+.claude/
+.DS_Store
+
+# Android leftovers if leye-mobile is checked out in the same folder
+local.properties
+keystore.properties
+keystore.properties.*
+version.properties
+playstoreK/
+.gradle/
+.idea/
+.kotlin/
+app/build/

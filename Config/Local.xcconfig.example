@@ -1,0 +1,7 @@
+// Copy to Local.xcconfig (gitignored) and adjust for your machine.
+// Only applied to Debug builds.
+
+// Django dev server on this Mac - simulator:
+// API_BASE_URL = http:/$()/localhost:8000/
+// Physical iPhone on the same Wi-Fi - use this Mac's LAN IP, e.g.:
+// API_BASE_URL = http:/$()/192.168.1.10:8000/

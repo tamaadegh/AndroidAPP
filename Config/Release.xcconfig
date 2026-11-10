@@ -1,0 +1,4 @@
+#include "Base.xcconfig"
+
+// Release must always point at production, never at a local or staging host.
+API_BASE_URL = https:/$()/tamaadeapi-7it5.onrender.com/
