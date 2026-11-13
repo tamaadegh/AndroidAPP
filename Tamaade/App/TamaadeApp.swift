@@ -9,11 +9,6 @@ struct TamaadeApp: App {
     /// Unit tests host the app; it must not call the live API while they run.
     static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
-    init() {
-        // Product images are fetched by AsyncImage through the shared URL cache.
-        URLCache.shared = URLCache(memoryCapacity: 32 * 1024 * 1024, diskCapacity: 200 * 1024 * 1024)
-    }
-
     var body: some Scene {
         WindowGroup {
             RootView()

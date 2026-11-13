@@ -17,7 +17,7 @@ struct ForgotPasswordView: View {
     @State private var now = ProcessInfo.processInfo.systemUptime
 
     init(initialPhone: String) {
-        _phone = State(initialValue: initialPhone)
+        _phone = State(initialValue: PhoneNumber.ghanaLocalDigits(initialPhone))
     }
 
     private var fieldErrors: [String: String] { store.authFieldErrors }
@@ -29,57 +29,44 @@ struct ForgotPasswordView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                AuthHeader(
-                    title: "Reset your password",
-                    subtitle: codeSentTo == nil
-                        ? "Enter the phone number on your account. We'll text you a code."
-                        : "Enter the code from the SMS and choose a new password."
-                )
-                if let sentTo = codeSentTo {
-                    resetStep(sentTo)
-                } else {
-                    phoneStep
-                }
-                Button("Back") {
-                    if codeSentTo != nil {
-                        codeSentTo = nil
-                        code = ""
-                        edited()
-                    } else if router.authPath.isEmpty {
-                        router.dismissAuth()
-                    } else {
-                        dismiss()
-                    }
-                }
-                .foregroundColor(.muted)
-                .disabled(store.authLoading)
-                .padding(.vertical, 12)
+        AuthScaffold(
+            title: "Reset your password",
+            subtitle: codeSentTo == nil
+                ? "Enter the phone number on your account. We'll text you a code."
+                : "Enter the code from the SMS and choose a new password.",
+            onBack: {
+                if codeSentTo != nil { backToPhoneStep() } else if router.authPath.isEmpty { router.dismissAuth() } else { dismiss() }
+            },
+            backEnabled: !store.authLoading
+        ) {
+            if let sentTo = codeSentTo {
+                resetStep(sentTo)
+            } else {
+                phoneStep
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 32)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Color.pageBackground)
-        .navigationBarTitleDisplayMode(.inline)
+        .animation(.easeOut(duration: 0.2), value: shownError)
         .cooldownClock($now)
         .onAppear { store.clearAuthError() }
     }
 
     private var phoneStep: some View {
-        VStack(spacing: 0) {
-            PhoneNumberField(text: Binding(get: { phone }, set: { phone = $0; edited() }))
+        VStack(alignment: .leading, spacing: 0) {
+            FieldLabel("Phone number")
+            GhanaPhoneField(
+                digits: Binding(get: { phone }, set: { phone = $0; edited() }),
+                isError: localError != nil || fieldErrors["phone_number"] != nil
+            )
             FieldError(message: fieldErrors["phone_number"])
-            AuthErrorBlock(error: shownError)
-                .padding(.top, 16)
+                .padding(.bottom, 14)
+            AuthNotice(message: shownError)
             PrimaryButton(
                 title: store.authLoading ? "Sending code…" : cooldown > 0 ? "Send code (\(cooldown)s)" : "Send code",
                 loading: store.authLoading,
                 enabled: !store.authLoading && cooldown == 0
             ) {
                 guard let target = normalizedPhone else {
-                    localError = "Enter a valid Ghana mobile number, e.g. 024 123 4567"
+                    localError = "That number doesn't look right. Enter a Ghana mobile number, e.g. 24 123 4567."
                     return
                 }
                 store.requestPasswordReset(phone: target) { result in
@@ -87,66 +74,45 @@ struct ForgotPasswordView: View {
                     code = ""
                 }
             }
-            Text("Your account has no phone number? Sign in with your e-mail and password, " +
-                 "then add a phone number in Profile → Edit details.")
-                .font(.tBodySmall)
-                .foregroundColor(.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 12)
+            .padding(.bottom, 14)
+            AuthNotice(
+                message: "No phone number on your account? Sign in with your email and password, " +
+                    "then add one in Profile → Edit details.",
+                kind: .info
+            )
         }
     }
 
     private func resetStep(_ sentTo: String) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(sentTo)
-                    .font(.tTitle.weight(.bold))
-                    .foregroundColor(.foreground)
-                Spacer()
-                Button("Change number") {
-                    codeSentTo = nil
-                    code = ""
-                    edited()
-                }
-                .foregroundColor(.brandGreen)
-                .disabled(store.authLoading)
-            }
-            .padding(.bottom, 8)
-            BrandTextField(placeholder: "6-digit code", systemImage: "message",
-                           text: Binding(get: { code }, set: { code = PhoneNumber.filterCode($0); edited() }),
-                           keyboard: .numberPad, contentType: .oneTimeCode)
+        VStack(alignment: .leading, spacing: 0) {
+            CodeSentRow(phone: sentTo, loading: store.authLoading, onChange: backToPhoneStep)
+            OtpBoxes(code: Binding(get: { code }, set: { code = $0; edited() }),
+                     isError: fieldErrors["code"] != nil, enabled: !store.authLoading)
             FieldError(message: fieldErrors["code"])
+            FieldLabel("New password").padding(.top, 18)
             BrandTextField(placeholder: "New password", systemImage: "lock",
                            text: Binding(get: { password }, set: { password = $0; edited() }),
                            isSecure: true, showToggle: true, contentType: .newPassword)
-                .padding(.top, 14)
             FieldError(message: fieldErrors["new_password"])
+            FieldLabel("Confirm new password").padding(.top, 14)
             BrandTextField(placeholder: "Confirm new password", systemImage: "lock",
                            text: Binding(get: { confirmPassword }, set: { confirmPassword = $0; edited() }),
                            isSecure: true, contentType: .newPassword)
-                .padding(.top, 14)
             Text("At least \(Validation.minPasswordLength) characters.")
                 .font(.tBodySmall)
                 .foregroundColor(.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 4)
                 .padding(.bottom, 16)
-            AuthErrorBlock(error: shownError)
-            if shownError == nil, let info {
-                Text(info)
-                    .font(.tBodySmall)
-                    .foregroundColor(.brandGreen)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 8)
-            }
+            AuthNotice(message: shownError)
+            AuthNotice(message: shownError == nil ? info : nil, kind: .success)
             PrimaryButton(title: store.authLoading ? "Saving…" : "Reset password",
                           loading: store.authLoading, enabled: !store.authLoading) {
                 if code.count != PhoneNumber.otpLength {
                     localError = "Enter the 6-digit code we sent you."
                 } else if password.count < Validation.minPasswordLength {
-                    localError = "Password must be at least \(Validation.minPasswordLength) characters"
+                    localError = "Your new password needs at least \(Validation.minPasswordLength) characters."
                 } else if password != confirmPassword {
-                    localError = "Passwords don't match"
+                    localError = "The two passwords don't match."
                 } else {
                     localError = nil
                     store.confirmPasswordReset(phone: sentTo, code: code, newPassword: password) {
@@ -161,7 +127,14 @@ struct ForgotPasswordView: View {
                     info = "A new code is on its way."
                 }
             }
+            .padding(.top, 8)
         }
+    }
+
+    private func backToPhoneStep() {
+        codeSentTo = nil
+        code = ""
+        edited()
     }
 
     private func edited() {

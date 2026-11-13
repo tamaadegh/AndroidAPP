@@ -4,7 +4,12 @@ import Foundation
 /// Every call throws `APIError` with a user-facing message. Same endpoints and rules as the
 /// Android app's `TamaadeApi` object.
 final class TamaadeAPI {
-    static let shared = TamaadeAPI(baseURL: AppConfig.current.apiBase)
+    static let shared: TamaadeAPI = {
+        let api = TamaadeAPI(baseURL: AppConfig.current.apiBase)
+        // Unit tests never read or write the saved catalog.
+        if !TamaadeApp.isRunningTests { api.responseCacheDir = defaultResponseCacheDir() }
+        return api
+    }()
 
     /// Server root ending in "/".
     let baseURL: String
@@ -370,11 +375,54 @@ final class TamaadeAPI {
     }
 
     /// For list endpoints; also accepts a DRF paginated {"results": [...]} body.
+    /// Every successful catalog list is saved on the phone; inside `fromCache` the saved copy is
+    /// read instead of the network, so the store opens instantly on the next launch.
     private func requestList(_ path: String) async throws -> [JSONObject] {
+        let cacheFile = responseCacheDir?.appendingPathComponent(Self.cacheName(path))
+        if Self.cacheOnly {
+            guard let cacheFile, let data = try? Data(contentsOf: cacheFile) else {
+                throw APIError(message: "No saved copy yet", status: 0)
+            }
+            return Self.toArray(JSON.parse(data))
+        }
         let json = try await send("GET", path, body: nil, token: nil)
+        let array = Self.toArray(json)
+        if let cacheFile, json != nil, let data = try? JSONSerialization.data(withJSONObject: array) {
+            // Atomic write: a crash never leaves half a file behind.
+            try? data.write(to: cacheFile, options: .atomic)
+        }
+        return array
+    }
+
+    private static func toArray(_ json: Any?) -> [JSONObject] {
         if let array = json as? [Any] { return JSON.objects(array) }
         if let object = json as? JSONObject { return JSON.objects(object["results"]) }
         return []
+    }
+
+    // MARK: - Saved catalog
+
+    /// Where catalog responses are saved (Application Support, which iOS doesn't purge).
+    var responseCacheDir: URL?
+
+    @TaskLocal private static var cacheOnly = false
+
+    /// Runs catalog calls against the copies saved on the phone (no network).
+    static func fromCache<T>(_ block: () async throws -> T) async rethrows -> T {
+        try await $cacheOnly.withValue(true) { try await block() }
+    }
+
+    static func defaultResponseCacheDir() -> URL? {
+        guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return nil }
+        let dir = base.appendingPathComponent("catalog_cache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    static func cacheName(_ path: String) -> String {
+        path.replacingOccurrences(of: "[^A-Za-z0-9]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_")) + ".json"
     }
 
     private func send(_ method: String, _ path: String, body: JSONObject?, token: String?) async throws -> Any? {

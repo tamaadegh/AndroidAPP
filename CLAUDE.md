@@ -11,7 +11,7 @@ Open `Tamaade.xcodeproj`; see `README.md` for running and tests.
 
 ## The app talks to production
 
-Debug and Release both use `https://tamaadeapi-7it5.onrender.com/`:
+Debug and Release both use `https://api.tamaade.com/`:
 - Sign-in SMS codes are real, paid Hubtel SMS - never request an OTP from automated tests.
 - Hubtel checkouts take real money - never start one from automated tests.
 Unit tests stay offline; `TamaadeApp.isRunningTests` keeps the host app from calling the API.

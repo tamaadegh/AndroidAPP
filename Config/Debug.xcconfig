@@ -3,7 +3,7 @@
 // Debug builds talk to the live API on Render too, so the app can be tried on a
 // Mac without running the backend. Careful: SMS codes are real Hubtel SMS and
 // Hubtel checkouts take real money.
-API_BASE_URL = https:/$()/tamaadeapi-7it5.onrender.com/
+API_BASE_URL = https:/$()/api.tamaade.com/
 
 // To use a backend running on this Mac instead, override API_BASE_URL in
 // Local.xcconfig (copy Local.xcconfig.example), e.g. http://localhost:8000/.

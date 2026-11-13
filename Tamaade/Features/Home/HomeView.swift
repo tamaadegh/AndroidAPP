@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var catalog: CatalogModel
     @EnvironmentObject private var store: StoreModel
     @EnvironmentObject private var router: Router
+    @StateObject private var feed = EndlessFeed(keyPrefix: "home_feed")
 
     private var data: CatalogData { catalog.data }
 
@@ -16,6 +17,8 @@ struct HomeView: View {
         }
         .background(Color.pageBackground)
         .refreshable { await catalog.refresh() }
+        .onAppear { feed.update(source: data.products, loop: true) }
+        .onChange(of: catalog.productsVersion) { _ in feed.update(source: data.products, loop: true) }
     }
 
     @ViewBuilder
@@ -89,6 +92,7 @@ struct HomeView: View {
                 }
             }
             MerchRow(tiles: data.bottomTiles, onOpen: openLink)
+            exploreFeed
             let hasContent = !data.products.isEmpty || !data.banners.isEmpty ||
                 !data.mainTiles.isEmpty || !data.featuredTiles.isEmpty
             if !hasContent {
@@ -98,6 +102,36 @@ struct HomeView: View {
                     actionLabel: "Refresh",
                     onAction: { Task { await catalog.refresh() } }
                 )
+            }
+        }
+    }
+
+    /// Endless "Explore" feed: every product, two per row, loading more as you scroll.
+    @ViewBuilder
+    private var exploreFeed: some View {
+        if !feed.entries.isEmpty {
+            SectionHeader(title: "Explore", subtitle: "Keep scrolling for more finds")
+            let rows = stride(from: 0, to: feed.entries.count, by: 2).map {
+                Array(feed.entries[$0..<min($0 + 2, feed.entries.count)])
+            }
+            ForEach(rows, id: \.first!.id) { row in
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(row) { entry in
+                        ProductCard(
+                            product: entry.product,
+                            onTap: { router.push(.product(id: entry.product.id)) },
+                            onAddToCart: { add(entry.product) }
+                        )
+                        .frame(maxWidth: .infinity)
+                        .onAppear { feed.onAppear(entry) }
+                    }
+                    if row.count == 1 { Color.clear.frame(maxWidth: .infinity) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+            if feed.hasMore {
+                FeedLoadingFooter { feed.loadMore() }
             }
         }
     }
@@ -147,7 +181,7 @@ private struct HeroCarousel: View {
             TabView(selection: $page) {
                 ForEach(Array(banners.enumerated()), id: \.element.id) { index, banner in
                     Button { onTap(banner) } label: {
-                        RemoteImage(url: banner.image, contentMode: .fill)
+                        RemoteImage(url: banner.image, contentMode: .fill, size: .full)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .padding(.horizontal, 16)

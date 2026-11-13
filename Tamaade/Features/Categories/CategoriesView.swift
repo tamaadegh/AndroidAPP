@@ -45,7 +45,7 @@ private struct CategoryTile: View {
             ZStack {
                 Circle().fill(Color.cardImageBackground)
                 if category.icon != nil {
-                    RemoteImage(url: category.icon, contentMode: .fill)
+                    RemoteImage(url: category.icon, contentMode: .fill, size: .thumb)
                         .clipShape(Circle())
                 } else {
                     Text(category.name.prefix(1).uppercased())

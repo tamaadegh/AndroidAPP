@@ -7,18 +7,9 @@ struct AuthSheet: View {
     var body: some View {
         NavigationStack(path: $router.authPath) {
             if let root = router.authFlow?.root {
+                // Sign in / Sign up / Reset password draw their own green header with a back arrow.
                 screen(root)
                     .id(root)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button {
-                                router.dismissAuth()
-                            } label: {
-                                Image(systemName: "xmark")
-                            }
-                            .accessibilityLabel("Close")
-                        }
-                    }
                     .navigationDestination(for: AuthRoute.self) { screen($0) }
             }
         }

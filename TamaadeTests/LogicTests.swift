@@ -182,3 +182,32 @@ final class ParsingTests: XCTestCase {
         XCTAssertNil(AppConfig.normalizedBase("ftp://x"))
     }
 }
+
+final class GhanaPhoneFieldTests: XCTestCase {
+    func testLocalDigitsDropPrefixAndLeadingZero() {
+        XCTAssertEqual(PhoneNumber.ghanaLocalDigits("024 123 4567"), "241234567")
+        XCTAssertEqual(PhoneNumber.ghanaLocalDigits("+233 24 123 4567"), "241234567")
+        XCTAssertEqual(PhoneNumber.ghanaLocalDigits("233241234567"), "241234567")
+        XCTAssertEqual(PhoneNumber.normalizeGhana("241234567"), "+233241234567")
+    }
+
+    func testFormatsForDisplay() {
+        XCTAssertEqual(PhoneNumber.groupLocal("241234567"), "24 123 4567")
+        XCTAssertEqual(PhoneNumber.formatGhana("+233241234567"), "+233 24 123 4567")
+    }
+}
+
+final class ImageURLTests: XCTestCase {
+    func testResizesCloudinaryUploads() {
+        let url = "https://res.cloudinary.com/demo/image/upload/v123/products/shoe.jpg"
+        XCTAssertEqual(optimizedImageURL(url, .card),
+                       "https://res.cloudinary.com/demo/image/upload/f_webp,q_auto,c_limit,w_480/v123/products/shoe.jpg")
+    }
+
+    func testLeavesOtherURLsAlone() {
+        let transformed = "https://res.cloudinary.com/demo/image/upload/w_300,c_fill/v1/a.jpg"
+        XCTAssertEqual(optimizedImageURL(transformed, .card), transformed)
+        XCTAssertEqual(optimizedImageURL("https://example.com/a.jpg", .full), "https://example.com/a.jpg")
+        XCTAssertNil(optimizedImageURL("  ", .thumb))
+    }
+}

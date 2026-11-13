@@ -3,7 +3,7 @@ import Foundation
 /// Build-time configuration - the iOS counterpart of Android's `BuildConfig.API_BASE_URL`.
 /// The value comes from the `API_BASE_URL` Info.plist key, filled in by `Config/*.xcconfig`.
 struct AppConfig {
-    /// Server root, always ending in `/` (e.g. `https://tamaadeapi-7it5.onrender.com/`).
+    /// Server root, always ending in `/` (e.g. `https://api.tamaade.com/`).
     let apiBase: String
 
     static let current = AppConfig(bundle: .main)

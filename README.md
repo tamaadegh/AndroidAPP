@@ -13,7 +13,7 @@ Signing & Capabilities and choose the Apple developer team (`DEVELOPMENT_TEAM` i
 empty in the project). The bundle id is `com.tamaade.ecommerce`, like on Android.
 
 Debug and Release both use the **live API on Render**
-(`https://tamaadeapi-7it5.onrender.com/`). Render must deploy the TamaadeAPI branch
+(`https://api.tamaade.com/`). The server must run the TamaadeAPI branch
 `leye` (OTP, Hubtel, delete-account, token refresh, SMS password reset).
 To use a backend running on the Mac, copy `Config/Local.xcconfig.example` to
 `Config/Local.xcconfig` (gitignored) and set `API_BASE_URL`.

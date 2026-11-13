@@ -34,7 +34,19 @@ struct RootView: View {
                 .environmentObject(router)
         }
         .task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            // Show the splash at least 1.4 s, and use that time (up to 3.5 s) to load the
+            // catalog and the first screen's images, so Home opens fully drawn.
+            let started = Date()
+            let warmedUp = SplashFlag()
+            // Not awaited: downloads keep going in the background once the splash is gone.
+            Task { @MainActor in
+                await warmUpHome()
+                warmedUp.done = true
+            }
+            while !(warmedUp.done && Date().timeIntervalSince(started) >= 1.4) &&
+                Date().timeIntervalSince(started) < 3.5 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
             withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
         }
         .onAppear { store.music.onForeground() }
@@ -53,8 +65,20 @@ struct RootView: View {
         }
         // Keep the saved basket in line with the live catalog (removed products, new prices).
         .onChange(of: catalog.productsVersion) { _ in
-            if catalog.loadedOnce { store.syncCartWithCatalog(catalog.data.products) }
+            if catalog.loadedOnce {
+                store.syncCartWithCatalog(catalog.data.products)
+                ImagePrefetcher.prefetchCatalog(catalog.data)
+            }
         }
+    }
+
+    /// Waits for the catalog (saved copy or network), then decodes Home's first images.
+    private func warmUpHome() async {
+        let started = Date()
+        while catalog.loading && Date().timeIntervalSince(started) < 3.5 {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        await ImagePrefetcher.warmUpHome(catalog.data)
     }
 
     private func handle(_ event: StoreEvent) {
@@ -85,6 +109,12 @@ struct RootView: View {
             router.open(.cart)
         }
     }
+}
+
+/// Set once Home's first images are ready (read by the splash loop on the main actor).
+@MainActor
+private final class SplashFlag {
+    var done = false
 }
 
 struct MainTabView: View {

@@ -5,6 +5,8 @@ struct DealsView: View {
     @EnvironmentObject private var catalog: CatalogModel
     @EnvironmentObject private var store: StoreModel
     @EnvironmentObject private var router: Router
+    /// Endless deals feed: the whole page when there are no sections, else "More deals" below them.
+    @StateObject private var feed = EndlessFeed(keyPrefix: "deals_feed")
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -14,7 +16,6 @@ struct DealsView: View {
         let sections = data.dealsSections
             .map { DealSection(section: $0, products: productsForSection($0.productSource, data.products)) }
             .filter { !$0.products.isEmpty }
-        let fallbackDeals = sections.isEmpty ? data.deals : []
 
         ScrollView {
             if catalog.loading && data.products.isEmpty {
@@ -35,10 +36,12 @@ struct DealsView: View {
                         .padding(.horizontal, -16)
                         grid(entry.products)
                     }
-                    if !fallbackDeals.isEmpty {
-                        grid(fallbackDeals)
+                    if !sections.isEmpty && !feed.entries.isEmpty {
+                        SectionHeader(title: "More deals", subtitle: "Keep scrolling")
+                            .padding(.horizontal, -16)
                     }
-                    if sections.isEmpty && fallbackDeals.isEmpty {
+                    feedGrid
+                    if sections.isEmpty && data.deals.isEmpty {
                         EmptyState(title: "No deals right now",
                                    message: "New offers will appear here. Pull down to refresh.")
                     }
@@ -48,6 +51,21 @@ struct DealsView: View {
         }
         .background(Color.pageBackground)
         .refreshable { await catalog.refresh() }
+        .onAppear { feed.update(source: catalog.data.deals, loop: true) }
+        .onChange(of: catalog.productsVersion) { _ in feed.update(source: catalog.data.deals, loop: true) }
+    }
+
+    @ViewBuilder
+    private var feedGrid: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(feed.entries) { entry in
+                card(entry.product)
+                    .onAppear { feed.onAppear(entry) }
+            }
+        }
+        if feed.hasMore {
+            FeedLoadingFooter { feed.loadMore() }
+        }
     }
 
     @ViewBuilder
@@ -97,16 +115,20 @@ struct DealsView: View {
     private func grid(_ products: [Product]) -> some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(products) { product in
-                ProductCard(
-                    product: product,
-                    onTap: { router.push(.product(id: product.id)) },
-                    onAddToCart: {
-                        store.addToCart(product)
-                        router.showToast("\(product.name) added to basket")
-                    }
-                )
+                card(product)
             }
         }
+    }
+
+    private func card(_ product: Product) -> some View {
+        ProductCard(
+            product: product,
+            onTap: { router.push(.product(id: product.id)) },
+            onAddToCart: {
+                store.addToCart(product)
+                router.showToast("\(product.name) added to basket")
+            }
+        )
     }
 
     private func openLink(_ link: String?, _ fallback: String) {

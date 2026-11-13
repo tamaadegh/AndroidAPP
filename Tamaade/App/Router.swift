@@ -104,6 +104,11 @@ final class Router: ObservableObject {
         authPath = []
     }
 
+    /// Back arrow of the sign-in screens: pops a pushed screen, or closes the sheet.
+    func authBack() {
+        if authPath.isEmpty { dismissAuth() } else { authPath.removeLast() }
+    }
+
     /// "Sign up" from Login: never stacks a second Sign up.
     func showSignUp(phone: String) {
         if let index = authPath.firstIndex(where: { if case .signUp = $0 { return true } else { return false } }) {

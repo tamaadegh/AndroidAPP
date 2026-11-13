@@ -18,6 +18,8 @@ struct APIError: Error, LocalizedError, Equatable {
     static let offlineMessage = "Can't reach Tamaade. Check your internet connection and try again."
     static let timeoutMessage = "Tamaade is taking too long to respond. Please try again."
     static let sessionExpiredMessage = "Your session has expired. Please sign in again."
+    static let unavailableMessage = "This feature isn't available on the server yet."
+    static let serverErrorPrefix = "Tamaade server error"
 
     static let offline = APIError(message: offlineMessage, status: 0)
 
@@ -64,8 +66,8 @@ enum APIErrorParser {
             }
             if !messages.isEmpty { return messages.joined(separator: "\n") }
         }
-        if status == 404 { return "This feature isn't available on the server yet." }
-        if status >= 500 { return "Tamaade server error (\(status)). Please try again shortly." }
+        if status == 404 { return APIError.unavailableMessage }
+        if status >= 500 { return "\(APIError.serverErrorPrefix) (\(status)). Please try again shortly." }
         return "Request failed (\(status)). Please try again."
     }
 

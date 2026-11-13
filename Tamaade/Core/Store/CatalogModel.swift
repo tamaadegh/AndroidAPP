@@ -58,43 +58,59 @@ final class CatalogModel: ObservableObject {
 
     private func load(pull: Bool) {
         if loadTask != nil { return }
-        if pull { refreshing = true } else { loading = true }
         error = nil
         let api = self.api
+        let firstOpen = !pull && !loadedOnce
+        if pull { refreshing = true } else { loading = true }
         loadTask = Task { [weak self] in
+            // First open: show the catalog saved on the phone right away, then refresh it.
+            var showingSaved = false
+            if firstOpen, let saved = try? await TamaadeAPI.fromCache({ try await Self.fetchAll(api) }),
+               !saved.products.isEmpty {
+                self?.data = saved
+                self?.loadedOnce = true
+                self?.productsVersion += 1
+                self?.loading = false // background refresh, no spinner
+                showingSaved = true
+            }
             do {
-                async let products = api.products()
-                async let categories = Self.optional { try await api.categories() }
-                async let banners = Self.optional { try await api.banners() }
-                async let tiers = Self.optional { try await api.priceTiers() }
-                async let promos = Self.optional { try await api.promos() }
-                async let main = Self.optional { try await api.merchTiles(placement: "main") }
-                async let featured = Self.optional { try await api.merchTiles(placement: "featured") }
-                async let bottom = Self.optional { try await api.merchTiles(placement: "bottom") }
-                async let home = Self.optional { try await api.homeSections(location: "home") }
-                async let deals = Self.optional { try await api.homeSections(location: "deals") }
-                let loaded = CatalogData(
-                    products: try await products,
-                    categories: await categories,
-                    banners: await banners,
-                    priceTiers: await tiers,
-                    promos: await promos,
-                    mainTiles: await main,
-                    featuredTiles: await featured,
-                    bottomTiles: await bottom,
-                    homeSections: await home,
-                    dealsSections: await deals
-                )
+                let loaded = try await Self.fetchAll(api)
                 self?.data = loaded
                 self?.loadedOnce = true
                 self?.productsVersion += 1
             } catch {
-                self?.error = APIError.from(error).message
+                // With a saved catalog on screen, a failed refresh (e.g. offline) stays silent.
+                if !showingSaved { self?.error = APIError.from(error).message }
             }
             self?.loading = false
             self?.refreshing = false
             self?.loadTask = nil
         }
+    }
+
+    nonisolated private static func fetchAll(_ api: TamaadeAPI) async throws -> CatalogData {
+        async let products = api.products()
+        async let categories = optional { try await api.categories() }
+        async let banners = optional { try await api.banners() }
+        async let tiers = optional { try await api.priceTiers() }
+        async let promos = optional { try await api.promos() }
+        async let main = optional { try await api.merchTiles(placement: "main") }
+        async let featured = optional { try await api.merchTiles(placement: "featured") }
+        async let bottom = optional { try await api.merchTiles(placement: "bottom") }
+        async let home = optional { try await api.homeSections(location: "home") }
+        async let deals = optional { try await api.homeSections(location: "deals") }
+        return CatalogData(
+            products: try await products,
+            categories: await categories,
+            banners: await banners,
+            priceTiers: await tiers,
+            promos: await promos,
+            mainTiles: await main,
+            featuredTiles: await featured,
+            bottomTiles: await bottom,
+            homeSections: await home,
+            dealsSections: await deals
+        )
     }
 
     /// Product from the loaded list, else GET api/products/<id>/.

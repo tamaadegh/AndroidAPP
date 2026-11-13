@@ -218,7 +218,7 @@ private struct CartLineRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onOpen) {
-                RemoteImage(url: line.product.image, contentMode: .fill)
+                RemoteImage(url: line.product.image, contentMode: .fill, size: .thumb)
                     .frame(width: 72, height: 72)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }

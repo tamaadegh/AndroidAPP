@@ -101,7 +101,7 @@ struct CategoryChip: View {
                     Circle()
                         .fill(highlight ? Color.brandGreen : Color.cardImageBackground)
                         .frame(width: 64, height: 64)
-                    RemoteImage(url: imageURL, contentMode: .fill)
+                    RemoteImage(url: imageURL, contentMode: .fill, size: .thumb)
                         .frame(width: highlight ? 58 : 64, height: highlight ? 58 : 64)
                         .clipShape(Circle())
                         .frame(width: 64, height: 64)

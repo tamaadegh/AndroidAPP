@@ -96,24 +96,6 @@ struct PrimaryButton: View {
     }
 }
 
-struct AuthHeader: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.tHeadline)
-                .foregroundColor(.foreground)
-            Text(subtitle)
-                .font(.tBody)
-                .foregroundColor(.muted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 24)
-    }
-}
-
 /// Server message for one field, shown right under it.
 struct FieldError: View {
     let message: String?

@@ -7,6 +7,7 @@ struct ProductListView: View {
     @EnvironmentObject private var store: StoreModel
     @EnvironmentObject private var router: Router
     @State private var query: String
+    @StateObject private var feed = EndlessFeed(keyPrefix: "list")
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -40,7 +41,8 @@ struct ProductListView: View {
                     }
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(products) { product in
+                        ForEach(feed.entries) { entry in
+                            let product = entry.product
                             ProductCard(
                                 product: product,
                                 onTap: { router.push(.product(id: product.id)) },
@@ -49,12 +51,19 @@ struct ProductListView: View {
                                     router.showToast("\(product.name) added to basket")
                                 }
                             )
+                            .onAppear { feed.onAppear(entry) }
                         }
                     }
                     .padding(16)
+                    if feed.hasMore {
+                        FeedLoadingFooter { feed.loadMore() }
+                    }
                 }
             }
         }
+        // Searches stop at the last match; browsing a category or the whole catalog never ends.
+        .onAppear { feed.update(source: products, loop: query.isBlank) }
+        .onChange(of: products.map(\.id)) { _ in feed.update(source: products, loop: query.isBlank) }
         .scrollDismissesKeyboard(.interactively)
         .background(Color.pageBackground)
         .navigationBarTitleDisplayMode(.inline)

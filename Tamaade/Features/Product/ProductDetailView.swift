@@ -139,12 +139,12 @@ private struct ProductGallery: View {
     @State private var page = 0
 
     var body: some View {
-        let urls: [String?] = product.images.isEmpty ? [product.image] : product.images.map { Optional($0) }
+        let urls = ImagePrefetcher.galleryURLs(product)
         ZStack(alignment: .bottom) {
             Color.cardImageBackground
             TabView(selection: $page) {
                 ForEach(urls.indices, id: \.self) { i in
-                    RemoteImage(url: urls[i])
+                    RemoteImage(url: urls[i], size: .full, previewSize: .card)
                         .padding(24)
                         .tag(i)
                 }
@@ -156,5 +156,7 @@ private struct ProductGallery: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
+        // Fetch every gallery photo now so swiping never waits on the network.
+        .task(id: product.id) { ImagePrefetcher.prefetchProductGallery(product) }
     }
 }

@@ -16,7 +16,7 @@ struct SignUpView: View {
     @State private var localError: String?
 
     init(initialPhone: String) {
-        _phone = State(initialValue: initialPhone)
+        _phone = State(initialValue: PhoneNumber.ghanaLocalDigits(initialPhone))
     }
 
     private var fieldErrors: [String: String] { store.authFieldErrors }
@@ -26,63 +26,74 @@ struct SignUpView: View {
         let formError = fieldErrors["non_field_errors"].flatMap {
             localError == nil && $0 != store.authError ? $0 : nil
         }
-        ScrollView {
-            VStack(spacing: 0) {
-                AuthHeader(title: "Create your Tamaade account",
-                           subtitle: "Shop online in Ghana — Quality + Speed.")
-                AuthErrorBlock(error: shownError)
-                AuthErrorBlock(error: formError)
-                BrandTextField(placeholder: "First name", systemImage: "person", text: edited($firstName),
-                               contentType: .givenName, autocapitalization: .words)
-                FieldError(message: fieldErrors["first_name"])
-                BrandTextField(placeholder: "Last name", systemImage: "person", text: edited($lastName),
-                               contentType: .familyName, autocapitalization: .words)
-                    .padding(.top, 14)
-                FieldError(message: fieldErrors["last_name"])
-                BrandTextField(placeholder: "Email", systemImage: "envelope", text: edited($email),
-                               keyboard: .emailAddress, contentType: .emailAddress, autocapitalization: .never)
-                    .padding(.top, 14)
-                FieldError(message: fieldErrors["email"])
-                PhoneNumberField(text: edited($phone))
-                    .padding(.top, 14)
+        AuthScaffold(
+            title: "Create your account",
+            subtitle: "Shop online in Ghana — Quality + Speed.",
+            onBack: { router.authBack() },
+            content: {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        FieldLabel("First name")
+                        BrandTextField(placeholder: "Ama", systemImage: "person", text: edited($firstName),
+                                       contentType: .givenName, autocapitalization: .words)
+                        FieldError(message: fieldErrors["first_name"])
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        FieldLabel("Last name")
+                        BrandTextField(placeholder: "Mensah", systemImage: "person", text: edited($lastName),
+                                       contentType: .familyName, autocapitalization: .words)
+                        FieldError(message: fieldErrors["last_name"])
+                    }
+                }
+                FieldLabel("Phone number").padding(.top, 14)
+                GhanaPhoneField(digits: edited($phone), isError: fieldErrors["phone_number"] != nil)
                 FieldError(message: fieldErrors["phone_number"])
-                hint("Add an email to sign in with your password, or a phone number to sign in with an SMS code — or both.")
-                BrandTextField(placeholder: "Password", systemImage: "lock", text: edited($password),
-                               isSecure: true, showToggle: true, contentType: .newPassword)
-                    .padding(.top, 14)
+                FieldLabel("Email").padding(.top, 14)
+                BrandTextField(placeholder: "you@example.com", systemImage: "envelope", text: edited($email),
+                               keyboard: .emailAddress, contentType: .emailAddress, autocapitalization: .never)
+                FieldError(message: fieldErrors["email"])
+                hint("Phone lets you sign in with an SMS code, email with your password. One of the two is enough.")
+                FieldLabel("Password").padding(.top, 14)
+                BrandTextField(placeholder: "At least \(Validation.minPasswordLength) characters", systemImage: "lock",
+                               text: edited($password), isSecure: true, showToggle: true, contentType: .newPassword)
                 FieldError(message: fieldErrors["password"])
-                BrandTextField(placeholder: "Confirm password", systemImage: "lock", text: edited($confirmPassword),
+                FieldLabel("Confirm password").padding(.top, 14)
+                BrandTextField(placeholder: "Type it again", systemImage: "lock", text: edited($confirmPassword),
                                isSecure: true, contentType: .newPassword)
-                    .padding(.top, 14)
-                hint("At least \(Validation.minPasswordLength) characters.")
+                    .padding(.bottom, 18)
+                // Errors sit right above the button, where the user is looking after tapping it.
+                AuthNotice(
+                    message: shownError,
+                    title: localError == nil && shownError.map({ NoticeKind.classify($0) == .error }) == true
+                        ? "Couldn't create your account" : nil
+                )
+                AuthNotice(message: formError)
                 PrimaryButton(title: store.authLoading ? "Creating account…" : "Create account",
                               loading: store.authLoading, enabled: !store.authLoading, action: submit)
-                    .padding(.top, 16)
                 HStack(spacing: 4) {
                     Text("By signing up you agree to our").foregroundColor(.muted)
                     Button("Privacy Policy") { router.authPath.append(.privacy) }
                         .foregroundColor(.brandGreen)
                 }
                 .font(.tBodySmall)
+                .frame(maxWidth: .infinity)
                 .padding(.top, 12)
+            },
+            footer: {
                 HStack(spacing: 4) {
                     Text("Already have an account?").foregroundColor(.muted)
                     Button("Sign in") {
                         edited()
-                        router.showLogin(phone: phone.trimmingCharacters(in: .whitespaces))
+                        router.showLogin(phone: PhoneNumber.normalizeGhana(phone) ?? phone)
                     }
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.brandGreen)
                 }
                 .font(.system(size: 15))
-                .padding(.top, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 32)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .background(Color.pageBackground)
-        .navigationBarTitleDisplayMode(.inline)
+        )
+        .animation(.easeOut(duration: 0.2), value: shownError)
         .onAppear { store.clearAuthError() }
     }
 
@@ -110,17 +121,17 @@ struct SignUpView: View {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedPhone: String? = phone.isBlank ? "" : PhoneNumber.normalizeGhana(phone)
         if firstName.isBlank || lastName.isBlank {
-            localError = "Enter your first and last name"
+            localError = "Enter your first and last name."
         } else if trimmedEmail.isEmpty && phone.isBlank {
-            localError = "Enter an email or a phone number."
+            localError = "Add a phone number or an email so you can sign in."
         } else if !trimmedEmail.isEmpty && !Validation.isEmail(trimmedEmail) {
-            localError = "Enter a valid email"
+            localError = "That email doesn't look right. Check it and try again."
         } else if normalizedPhone == nil {
-            localError = "Enter a valid Ghana mobile number, e.g. 024 123 4567"
+            localError = "That number doesn't look right. Enter a Ghana mobile number, e.g. 24 123 4567."
         } else if password.count < Validation.minPasswordLength {
-            localError = "Password must be at least \(Validation.minPasswordLength) characters"
+            localError = "Your password needs at least \(Validation.minPasswordLength) characters."
         } else if password != confirmPassword {
-            localError = "Passwords don't match"
+            localError = "The two passwords don't match."
         } else {
             localError = nil
         }
