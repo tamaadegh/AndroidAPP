@@ -82,43 +82,65 @@ class CatalogViewModel : ViewModel() {
 
     private fun load(pull: Boolean) {
         if (loadJob?.isActive == true) return
-        if (pull) refreshing = true else loading = true
         error = null
         loadJob = viewModelScope.launch {
-            try {
-                data = coroutineScope {
-                    val products = async { TamaadeApi.products() }
-                    val categories = async { optional { TamaadeApi.categories() } }
-                    val banners = async { optional { TamaadeApi.banners() } }
-                    val tiers = async { optional { TamaadeApi.priceTiers() } }
-                    val promos = async { optional { TamaadeApi.promos() } }
-                    val main = async { optional { TamaadeApi.merchTiles("main") } }
-                    val featured = async { optional { TamaadeApi.merchTiles("featured") } }
-                    val bottom = async { optional { TamaadeApi.merchTiles("bottom") } }
-                    val home = async { optional { TamaadeApi.homeSections("home") } }
-                    val deals = async { optional { TamaadeApi.homeSections("deals") } }
-                    CatalogData(
-                        products = products.await(),
-                        categories = categories.await(),
-                        banners = banners.await(),
-                        priceTiers = tiers.await(),
-                        promos = promos.await(),
-                        mainTiles = main.await(),
-                        featuredTiles = featured.await(),
-                        bottomTiles = bottom.await(),
-                        homeSections = home.await(),
-                        dealsSections = deals.await()
-                    )
+            // First open: show the catalog saved on the phone right away, then refresh it.
+            var showingSaved = false
+            if (!pull && !loadedOnce) {
+                showingSaved = try {
+                    val saved = TamaadeApi.fromCache { fetchAll() }
+                    if (saved.products.isNotEmpty()) {
+                        data = saved
+                        loadedOnce = true
+                        productsVersion++
+                        true
+                    } else false
+                } catch (_: ApiException) {
+                    false
                 }
+            }
+            when {
+                pull -> refreshing = true
+                showingSaved -> loading = false // background refresh, no spinner
+                else -> loading = true
+            }
+            try {
+                data = fetchAll()
                 loadedOnce = true
                 productsVersion++
             } catch (e: ApiException) {
-                error = e.message ?: "Couldn't load the store. Please try again."
+                // With a saved catalog on screen, a failed refresh (e.g. offline) stays silent.
+                if (!showingSaved) error = e.message ?: "Couldn't load the store. Please try again."
             } finally {
                 loading = false
                 refreshing = false
             }
         }
+    }
+
+    private suspend fun fetchAll(): CatalogData = coroutineScope {
+        val products = async { TamaadeApi.products() }
+        val categories = async { optional { TamaadeApi.categories() } }
+        val banners = async { optional { TamaadeApi.banners() } }
+        val tiers = async { optional { TamaadeApi.priceTiers() } }
+        val promos = async { optional { TamaadeApi.promos() } }
+        val main = async { optional { TamaadeApi.merchTiles("main") } }
+        val featured = async { optional { TamaadeApi.merchTiles("featured") } }
+        val bottom = async { optional { TamaadeApi.merchTiles("bottom") } }
+        val home = async { optional { TamaadeApi.homeSections("home") } }
+        val deals = async { optional { TamaadeApi.homeSections("deals") } }
+        CatalogData(
+            products = products.await(),
+            categories = categories.await(),
+            banners = banners.await(),
+            priceTiers = tiers.await(),
+            promos = promos.await(),
+            mainTiles = main.await(),
+            featuredTiles = featured.await(),
+            bottomTiles = bottom.await(),
+            homeSections = home.await(),
+            dealsSections = deals.await()
+        )
     }
 
     /** Product from the loaded list, else GET api/products/<id>/. */

@@ -1,5 +1,6 @@
 package com.tamaade.ecommerce.ui.categories
 
+import com.tamaade.ecommerce.data.ImageSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,6 +104,7 @@ fun CategoriesScreen(
                             if (category.icon != null) {
                                 ProductImage(
                                     model = category.icon,
+                                    size = ImageSize.Thumb,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()

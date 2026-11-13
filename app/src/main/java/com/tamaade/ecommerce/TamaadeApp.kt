@@ -1,5 +1,12 @@
 package com.tamaade.ecommerce
 
+import androidx.compose.material3.ScaffoldDefaults
+import androidx.compose.foundation.layout.WindowInsets
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.coroutineScope
+import androidx.compose.runtime.snapshotFlow
+import com.tamaade.ecommerce.data.ImagePrefetcher
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -68,6 +75,10 @@ fun TamaadeApp(
 
     val showBottomBar = TopLevelDestination.entries.any { it.route == currentRoute }
     val showTopBar = showBottomBar && currentRoute != TopLevelDestination.Cart.route
+    // Sign in / Sign up / Reset password draw their green header under the status bar
+    // and handle the system-bar and keyboard insets themselves.
+    val isAuthRoute = currentRoute == Routes.Login || currentRoute == Routes.SignUp ||
+        currentRoute == Routes.ForgotPassword
 
     fun openProductList(category: String = "", maxPrice: Int = -1, q: String = "", sort: String = "") {
         navController.navigate(Routes.productList(category, maxPrice, q, sort))
@@ -100,7 +111,10 @@ fun TamaadeApp(
 
     // Keep the saved basket in line with the live catalog (removed products, new prices).
     LaunchedEffect(catalog.productsVersion) {
-        if (catalog.loadedOnce) store.syncCartWithCatalog(catalog.data.products)
+        if (catalog.loadedOnce) {
+            store.syncCartWithCatalog(catalog.data.products)
+            ImagePrefetcher.prefetchCatalog(context, catalog.data)
+        }
     }
 
     fun showCart() {
@@ -154,6 +168,7 @@ fun TamaadeApp(
     }
 
     Scaffold(
+        contentWindowInsets = if (isAuthRoute) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (showTopBar) {
                 StoreTopBar(
@@ -179,7 +194,16 @@ fun TamaadeApp(
         ) {
             composable(Routes.Splash) {
                 LaunchedEffect(Unit) {
-                    delay(1400)
+                    // Show the splash at least 1.4 s, and use that time (up to 3.5 s) to load
+                    // the catalog and the first screen's images, so Home opens fully drawn.
+                    coroutineScope {
+                        val minimumShow = launch { delay(1400) }
+                        withTimeoutOrNull(3500) {
+                            snapshotFlow { catalog.loading }.first { !it }
+                            ImagePrefetcher.warmUpHome(context, catalog.data)
+                        }
+                        minimumShow.join()
+                    }
                     navController.navigate(TopLevelDestination.Home.route) {
                         popUpTo(Routes.Splash) { inclusive = true }
                     }

@@ -1,5 +1,11 @@
 package com.tamaade.ecommerce.ui.home
 
+import com.tamaade.ecommerce.ui.components.FeedLoadingFooter
+import com.tamaade.ecommerce.ui.components.LoadMoreOnScroll
+import com.tamaade.ecommerce.ui.components.rememberEndlessFeed
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.tamaade.ecommerce.data.ImageSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +79,12 @@ fun HomeScreen(
             .fillMaxSize()
             .background(PageBackground)
     ) {
+        val listState = rememberLazyListState()
+        val feed = rememberEndlessFeed(catalog.products, keyPrefix = "home_feed")
+        feed.LoadMoreOnScroll(listState)
+
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
@@ -177,6 +188,38 @@ fun HomeScreen(
 
             merchRow("bottom_tiles", catalog.bottomTiles, onOpenLink)
 
+            // Endless "Explore" feed: every product, two per row, loading more as you scroll.
+            if (feed.entries.isNotEmpty()) {
+                item(key = "feed_header") {
+                    SectionHeader(
+                        title = "Explore",
+                        subtitle = "Keep scrolling for more finds",
+                        onAction = null
+                    )
+                }
+                feed.entries.chunked(2).forEach { row ->
+                    item(key = "feed_row_${row.first().key}") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            row.forEach { entry ->
+                                ProductCard(
+                                    product = entry.product,
+                                    onClick = { onProductClick(entry.product.id) },
+                                    onAddToCart = { onAddToCart(entry.product.id) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+                if (feed.hasMore) item(key = "feed_footer") { FeedLoadingFooter() }
+            }
+
             val hasContent = catalog.products.isNotEmpty() || catalog.banners.isNotEmpty() ||
                 catalog.mainTiles.isNotEmpty() || catalog.featuredTiles.isNotEmpty()
             if (!hasContent) {
@@ -241,6 +284,7 @@ private fun HeroCarousel(banners: List<HeroBanner>, onClick: (HeroBanner) -> Uni
             val banner = banners[page]
             ProductImage(
                 model = banner.image,
+                size = ImageSize.Full,
                 contentDescription = banner.title.ifBlank { SiteConfig.name },
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

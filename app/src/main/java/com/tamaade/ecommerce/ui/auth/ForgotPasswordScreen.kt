@@ -82,32 +82,34 @@ fun ForgotPasswordScreen(
     val normalizedPhone = normalizeGhanaPhone(phone)
     val cooldown = rememberOtpCooldownSeconds(codeSentTo ?: normalizedPhone, otpCooldownPhone, otpCooldownUntil)
 
-    BackHandler(enabled = codeSentTo != null) {
+    fun backToPhoneStep() {
         codeSentTo = null
         code = ""
         edited()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp)
-    ) {
-        AuthHeader(
-            title = "Reset your password",
-            subtitle = if (codeSentTo == null) {
-                "Enter the phone number on your account. We'll text you a code."
-            } else {
-                "Enter the code from the SMS and choose a new password."
-            }
-        )
+    BackHandler(enabled = codeSentTo != null) { backToPhoneStep() }
 
-        val sentTo = codeSentTo
+    val sentTo = codeSentTo
+    AuthScaffold(
+        title = "Reset your password",
+        subtitle = if (sentTo == null) {
+            "Enter the phone number on your account. We'll text you a code."
+        } else {
+            "Enter the code from the SMS and choose a new password."
+        },
+        onBack = { if (sentTo != null) backToPhoneStep() else onBack() },
+        backEnabled = !loading
+    ) {
         if (sentTo == null) {
-            PhoneNumberField(value = phone, onValueChange = { phone = it; edited() })
+            FieldLabel("Phone number")
+            PhoneNumberField(
+                value = phone,
+                onValueChange = { phone = it; edited() },
+                isError = localError != null || fieldErrors["phone_number"] != null
+            )
             FieldError(fieldErrors["phone_number"])
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             AuthErrorBlock(shownError)
             PrimaryBrandButton(
                 text = when {
@@ -120,7 +122,7 @@ fun ForgotPasswordScreen(
                 onClick = {
                     val target = normalizedPhone
                     if (target == null) {
-                        localError = "Enter a valid Ghana mobile number, e.g. 024 123 4567"
+                        localError = "That number doesn't look right. Enter a Ghana mobile number, e.g. 24 123 4567."
                     } else {
                         onRequestCode(target) { sent ->
                             codeSentTo = sent
@@ -129,34 +131,34 @@ fun ForgotPasswordScreen(
                     }
                 }
             )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "Your account has no phone number? Sign in with your e-mail and password, " +
-                    "then add a phone number in Profile → Edit details.",
-                color = Muted,
-                style = MaterialTheme.typography.bodySmall
+            Spacer(Modifier.height(14.dp))
+            AuthNotice(
+                message = "No phone number on your account? Sign in with your email and password, " +
+                    "then add one in Profile → Edit details.",
+                kind = NoticeKind.Info
             )
         } else {
+            Text("Code sent by SMS to", color = Muted, style = MaterialTheme.typography.bodyMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(sentTo, color = Foreground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                TextButton(onClick = { codeSentTo = null; code = ""; edited() }, enabled = !loading) {
-                    Text("Change number", color = BrandGreen)
+                Text(formatGhanaPhone(sentTo), color = Foreground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = ::backToPhoneStep, enabled = !loading) {
+                    Text("Change", color = BrandGreen, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            AuthTextField(
-                value = code,
-                onValueChange = { input -> code = input.filter { it.isDigit() }.take(OTP_LENGTH); edited() },
-                placeholder = "6-digit code",
-                leadingIcon = Icons.Outlined.Sms,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Next)
+            Spacer(Modifier.height(12.dp))
+            OtpBoxes(
+                code = code,
+                onCodeChange = { code = it; edited() },
+                isError = fieldErrors["code"] != null,
+                enabled = !loading
             )
             FieldError(fieldErrors["code"])
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(18.dp))
+            FieldLabel("New password")
             AuthTextField(
                 value = password,
                 onValueChange = { password = it; edited() },
@@ -176,6 +178,7 @@ fun ForgotPasswordScreen(
             )
             FieldError(fieldErrors["new_password"])
             Spacer(Modifier.height(14.dp))
+            FieldLabel("Confirm new password")
             AuthTextField(
                 value = confirmPassword,
                 onValueChange = { confirmPassword = it; edited() },
@@ -188,10 +191,7 @@ fun ForgotPasswordScreen(
             Text("At least $MIN_RESET_PASSWORD_LENGTH characters.", color = Muted, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(16.dp))
             AuthErrorBlock(shownError)
-            if (shownError == null && info != null) {
-                Text(info.orEmpty(), color = BrandGreen, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
-            }
+            AuthNotice(if (shownError == null) info else null, kind = NoticeKind.Success)
             PrimaryBrandButton(
                 text = if (loading) "Saving…" else "Reset password",
                 loading = loading,
@@ -200,8 +200,8 @@ fun ForgotPasswordScreen(
                     localError = when {
                         code.length != OTP_LENGTH -> "Enter the 6-digit code we sent you."
                         password.length < MIN_RESET_PASSWORD_LENGTH ->
-                            "Password must be at least $MIN_RESET_PASSWORD_LENGTH characters"
-                        password != confirmPassword -> "Passwords don't match"
+                            "Your new password needs at least $MIN_RESET_PASSWORD_LENGTH characters."
+                        password != confirmPassword -> "The two passwords don't match."
                         else -> null
                     }
                     if (localError == null) onReset(sentTo, code, password)
@@ -231,10 +231,6 @@ fun ForgotPasswordScreen(
                     )
                 }
             }
-        }
-
-        TextButton(onClick = onBack, enabled = !loading, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Back", color = Muted)
         }
     }
 }

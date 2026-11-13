@@ -1,5 +1,9 @@
 package com.tamaade.ecommerce.data.api
 
+import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.AbstractCoroutineContextElement
+import java.io.File
 import com.tamaade.ecommerce.BuildConfig
 import com.tamaade.ecommerce.data.model.BackgroundMusicConfig
 import com.tamaade.ecommerce.data.model.CartLine
@@ -473,13 +477,58 @@ object TamaadeApi {
         else -> JSONObject()
     }
 
-    /** For list endpoints; also accepts a DRF paginated {"results": [...]} body. */
-    private suspend fun requestList(path: String): JSONArray =
-        when (val json = send("GET", path, null, null)) {
-            is JSONArray -> json
-            is JSONObject -> json.optJSONArray("results") ?: JSONArray()
-            else -> JSONArray()
+    /**
+     * For list endpoints; also accepts a DRF paginated {"results": [...]} body.
+     * Every successful catalog list is saved on the phone; inside [fromCache] the saved copy is
+     * read instead of the network, so the store opens instantly on the next launch.
+     */
+    private suspend fun requestList(path: String): JSONArray {
+        val cacheFile = responseCacheDir?.resolve(cacheName(path))
+        if (coroutineContext[CacheOnly.Key] != null) {
+            val text = withContext(Dispatchers.IO) {
+                cacheFile?.takeIf { it.exists() }?.readText(Charsets.UTF_8)
+            } ?: throw ApiException("No saved copy yet", 0)
+            return toArray(parseJson(text))
         }
+        val json = send("GET", path, null, null)
+        val array = toArray(json)
+        if (cacheFile != null && json != null) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    // Write then rename, so a crash never leaves half a file behind.
+                    val tmp = File(cacheFile.path + ".tmp")
+                    tmp.writeText(array.toString(), Charsets.UTF_8)
+                    tmp.renameTo(cacheFile)
+                }
+            }
+        }
+        return array
+    }
+
+    private fun toArray(json: Any?): JSONArray = when (json) {
+        is JSONArray -> json
+        is JSONObject -> json.optJSONArray("results") ?: JSONArray()
+        else -> JSONArray()
+    }
+
+    /** Where catalog responses are saved; set once from TamaadeApplication. */
+    @Volatile
+    private var responseCacheDir: File? = null
+
+    fun initResponseCache(dir: File) {
+        dir.mkdirs()
+        responseCacheDir = dir
+    }
+
+    /** Runs catalog calls against the copies saved on the phone (no network). */
+    suspend fun <T> fromCache(block: suspend () -> T): T = withContext(CacheOnly) { block() }
+
+    private object CacheOnly : AbstractCoroutineContextElement(Key) {
+        object Key : CoroutineContext.Key<CacheOnly>
+    }
+
+    private fun cacheName(path: String): String =
+        path.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_') + ".json"
 
     private suspend fun send(
         method: String,
@@ -565,8 +614,8 @@ object TamaadeApi {
             if (messages.isNotEmpty()) return messages.joinToString("\n")
         }
         return when {
-            code == 404 -> "This feature isn't available on the server yet."
-            code >= 500 -> "Tamaade server error ($code). Please try again shortly."
+            code == 404 -> UNAVAILABLE_MESSAGE
+            code >= 500 -> "$SERVER_ERROR_PREFIX ($code). Please try again shortly."
             else -> "Request failed ($code). Please try again."
         }
     }
@@ -594,7 +643,9 @@ object TamaadeApi {
     /** Machine-readable error fields that are not messages for the user. */
     private val META_KEYS = setOf("code", "retry_after", "errors")
 
-    private const val OFFLINE_MESSAGE = "Can't reach Tamaade. Check your internet connection and try again."
+    const val OFFLINE_MESSAGE = "Can't reach Tamaade. Check your internet connection and try again."
+    const val UNAVAILABLE_MESSAGE = "This feature isn't available on the server yet."
+    const val SERVER_ERROR_PREFIX = "Tamaade server error"
 }
 
 /** org.json's optString returns "null" for JSON null; this returns a real null instead. */

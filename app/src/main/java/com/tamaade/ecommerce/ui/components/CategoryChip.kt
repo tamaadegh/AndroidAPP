@@ -1,5 +1,6 @@
 package com.tamaade.ecommerce.ui.components
 
+import com.tamaade.ecommerce.data.ImageSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ fun CategoryChip(
             ) {
                 ProductImage(
                     model = imageUrl,
+                    size = ImageSize.Thumb,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

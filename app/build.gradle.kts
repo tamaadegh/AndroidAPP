@@ -52,13 +52,14 @@ android {
 
     buildTypes {
         debug {
-            // Local Django dev server as seen from the Android emulator.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
-            // Plain HTTP only for the local dev server.
+            // Live backend for testing. For a local Django dev server from the emulator,
+            // use "http://10.0.2.2:8000/" instead.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.tamaade.com/\"")
+            // Plain HTTP allowed in debug so the local dev server still works.
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         release {
-            buildConfigField("String", "API_BASE_URL", "\"https://tamaadeapi-7it5.onrender.com/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.tamaade.com/\"")
             // Release is HTTPS-only.
             manifestPlaceholders["usesCleartextTraffic"] = "false"
             signingConfig = signingConfigs.getByName("release")

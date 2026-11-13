@@ -1,5 +1,6 @@
 package com.tamaade.ecommerce.ui.cart
 
+import com.tamaade.ecommerce.data.ImageSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -367,6 +368,7 @@ private fun CartLineRow(
         ) {
             ProductImage(
                 model = line.product.image,
+                size = ImageSize.Thumb,
                 contentDescription = line.product.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

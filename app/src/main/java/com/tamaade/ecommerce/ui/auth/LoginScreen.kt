@@ -1,5 +1,15 @@
 package com.tamaade.ecommerce.ui.auth
 
+import com.tamaade.ecommerce.ui.theme.Foreground
+import com.tamaade.ecommerce.ui.theme.Border
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.BorderStroke
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -88,7 +98,7 @@ fun LoginScreen(
     fun sendCode() {
         val target = normalizedPhone
         if (target == null) {
-            localError = "Enter a valid Ghana mobile number, e.g. 024 123 4567"
+            localError = "That number doesn't look right. Enter a Ghana mobile number, e.g. 24 123 4567."
             return
         }
         onRequestCode(target) { sentTo ->
@@ -98,63 +108,95 @@ fun LoginScreen(
         }
     }
 
-    BackHandler(enabled = !useEmail && codeSentTo != null) {
+    fun backToPhoneStep() {
         codeSentTo = null
         code = ""
         edited()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp)
-    ) {
-        AuthHeader(
-            title = "Welcome back",
-            subtitle = when {
-                useEmail -> "Sign in to checkout and track your Tamaade orders."
-                codeSentTo != null -> "Enter the code from the SMS to sign in."
-                else -> "Sign in with your phone number. We'll text you a code."
-            }
-        )
+    BackHandler(enabled = !useEmail && codeSentTo != null) { backToPhoneStep() }
 
-        val sentTo = codeSentTo
+    val sentTo = codeSentTo
+    AuthScaffold(
+        title = when {
+            useEmail -> "Sign in with email"
+            sentTo != null -> "Check your messages"
+            else -> "Welcome back"
+        },
+        subtitle = when {
+            useEmail -> "Use the email and password of your Tamaade account."
+            sentTo != null -> "Enter the 6-digit code we just sent you."
+            else -> null
+        },
+        onBack = { if (!useEmail && sentTo != null) backToPhoneStep() else onBack() },
+        footer = {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("New to Tamaade? ", color = Muted)
+                TextButton(onClick = { edited(); onSignUp(if (useEmail) "" else phone.trim()) }) {
+                    Text("Create an account", color = BrandGreen, fontWeight = FontWeight.Bold)
+                }
+            }
+            TextButton(onClick = onBack) {
+                Text("Continue as guest", color = Muted)
+            }
+        }
+    ) {
         when {
             useEmail -> {
+                FieldLabel("Email")
                 AuthTextField(
                     value = email,
                     onValueChange = { email = it; edited() },
-                    placeholder = "Email",
+                    placeholder = "you@example.com",
                     leadingIcon = Icons.Outlined.Email,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
                 )
                 Spacer(Modifier.height(14.dp))
+                FieldLabel("Password")
                 AuthTextField(
                     value = password,
                     onValueChange = { password = it; edited() },
-                    placeholder = "Password",
+                    placeholder = "Your password",
                     leadingIcon = Icons.Outlined.Lock,
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = { PasswordToggle(showPassword) { showPassword = !showPassword } },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
                 )
                 TextButton(
                     onClick = { edited(); onForgotPassword("") },
                     enabled = !loading,
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Forgot password?", color = BrandGreen)
+                    Text("Forgot password?", color = BrandGreen, fontWeight = FontWeight.SemiBold)
                 }
-                AuthErrorBlock(shownError)
+                AuthNotice(
+                    message = shownError,
+                    title = if (localError == null && shownError != null &&
+                        classifyError(shownError) == NoticeKind.Error) "Couldn't sign you in" else null
+                )
                 PrimaryBrandButton(
-                    text = if (loading) "Signing in…" else "Sign In",
+                    text = if (loading) "Signing in…" else "Sign in",
                     loading = loading,
                     enabled = !loading,
                     onClick = {
-                        if (email.isBlank() || password.isBlank()) localError = "Enter email and password"
-                        else onSubmit(email.trim(), password)
+                        localError = when {
+                            email.isBlank() && password.isBlank() -> "Enter your email and password."
+                            email.isBlank() -> "Enter your email."
+                            password.isBlank() -> "Enter your password."
+                            else -> null
+                        }
+                        if (localError == null) onSubmit(email.trim(), password)
                     }
+                )
+                OrDivider()
+                SwitchMethodButton(
+                    text = "Continue with phone number",
+                    icon = Icons.Outlined.PhoneAndroid,
+                    enabled = !loading,
+                    onClick = { useEmail = false; edited() }
                 )
             }
 
@@ -166,7 +208,7 @@ fun LoginScreen(
                 error = shownError,
                 info = info,
                 resendSeconds = cooldown,
-                verifyLabel = "Sign In",
+                verifyLabel = "Sign in",
                 onVerify = { typed -> onVerifyCode(sentTo, typed) },
                 onResend = {
                     edited()
@@ -175,61 +217,72 @@ fun LoginScreen(
                         info = "A new code is on its way."
                     }
                 },
-                onChangeNumber = {
-                    codeSentTo = null
-                    code = ""
-                    edited()
-                }
+                onChangeNumber = ::backToPhoneStep
             )
 
             else -> {
-                PhoneNumberField(value = phone, onValueChange = { phone = it; edited() })
-                Spacer(Modifier.height(16.dp))
-                AuthErrorBlock(
-                    error = shownError,
-                    actionLabel = if (localError == null && errorCode == NOT_REGISTERED) "Create an account" else null,
-                    onAction = { edited(); onSignUp(normalizedPhone ?: phone.trim()) }
+                FieldLabel("Phone number")
+                PhoneNumberField(
+                    value = phone,
+                    onValueChange = { phone = it; edited() },
+                    isError = localError != null,
+                    onDone = { if (!loading && cooldown == 0) sendCode() }
                 )
+                Spacer(Modifier.height(14.dp))
+                val serverError = if (localError == null) error else null
+                when {
+                    serverError != null && classifyError(serverError) == NoticeKind.Unavailable -> AuthNotice(
+                        message = "Signing in with a phone number isn't switched on yet. " +
+                            "Use your email and password for now.",
+                        kind = NoticeKind.Unavailable,
+                        actionLabel = "Use email instead",
+                        onAction = { useEmail = true; edited() }
+                    )
+                    serverError != null && errorCode == NOT_REGISTERED -> AuthNotice(
+                        message = serverError,
+                        title = "No account with this number",
+                        actionLabel = "Create an account",
+                        onAction = { edited(); onSignUp(normalizedPhone ?: phone.trim()) }
+                    )
+                    else -> AuthNotice(shownError)
+                }
                 PrimaryBrandButton(
                     text = when {
                         loading -> "Sending code…"
-                        cooldown > 0 -> "Send code (${cooldown}s)"
+                        cooldown > 0 -> "Send code again in ${cooldown}s"
                         else -> "Send code"
                     },
                     loading = loading,
                     enabled = !loading && cooldown == 0,
                     onClick = ::sendCode
                 )
-            }
-        }
-
-        if (codeSentTo == null || useEmail) {
-            Spacer(Modifier.height(8.dp))
-            TextButton(
-                onClick = { useEmail = !useEmail; edited() },
-                enabled = !loading,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Text(
-                    if (useEmail) "Sign in with phone number instead" else "Sign in with email instead",
-                    color = BrandGreen
+                OrDivider()
+                SwitchMethodButton(
+                    text = "Continue with email",
+                    icon = Icons.Outlined.Email,
+                    enabled = !loading,
+                    onClick = { useEmail = true; edited() }
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Don't have an account? ", color = Muted)
-            TextButton(onClick = { edited(); onSignUp(if (useEmail) "" else phone.trim()) }) {
-                Text("Sign up", color = BrandGreen, fontWeight = FontWeight.Bold)
-            }
-        }
-        TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Continue as guest", color = Muted)
-        }
+    }
+}
+
+/** Outlined button that switches between phone and email sign-in. */
+@Composable
+private fun SwitchMethodButton(text: String, icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+    ) {
+        Icon(icon, contentDescription = null, tint = Foreground, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, color = Foreground, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -267,61 +320,74 @@ fun SignUpScreen(
         onClearError()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp)
+    AuthScaffold(
+        title = "Create your account",
+        subtitle = "Shop online in Ghana — Quality + Speed.",
+        onBack = onBack,
+        footer = {
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Already have an account? ", color = Muted)
+                TextButton(onClick = { edited(); onSignIn(phone.trim()) }) {
+                    Text("Sign in", color = BrandGreen, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     ) {
-        AuthHeader(
-            title = "Create your Tamaade account",
-            subtitle = "Shop online in Ghana — Quality + Speed."
-        )
-        AuthErrorBlock(shownError)
-        AuthErrorBlock(formError)
-
-        AuthTextField(
-            value = firstName,
-            onValueChange = { firstName = it; edited() },
-            placeholder = "First name",
-            leadingIcon = Icons.Outlined.Person
-        )
-        FieldError(fieldErrors["first_name"])
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                FieldLabel("First name")
+                AuthTextField(
+                    value = firstName,
+                    onValueChange = { firstName = it; edited() },
+                    placeholder = "Ama",
+                    leadingIcon = Icons.Outlined.Person
+                )
+                FieldError(fieldErrors["first_name"])
+            }
+            Column(Modifier.weight(1f)) {
+                FieldLabel("Last name")
+                AuthTextField(
+                    value = lastName,
+                    onValueChange = { lastName = it; edited() },
+                    placeholder = "Mensah",
+                    leadingIcon = Icons.Outlined.Person
+                )
+                FieldError(fieldErrors["last_name"])
+            }
+        }
         Spacer(Modifier.height(14.dp))
-        AuthTextField(
-            value = lastName,
-            onValueChange = { lastName = it; edited() },
-            placeholder = "Last name",
-            leadingIcon = Icons.Outlined.Person
+        FieldLabel("Phone number")
+        PhoneNumberField(
+            value = phone,
+            onValueChange = { phone = it; edited() },
+            isError = fieldErrors["phone_number"] != null
         )
-        FieldError(fieldErrors["last_name"])
+        FieldError(fieldErrors["phone_number"])
         Spacer(Modifier.height(14.dp))
+        FieldLabel("Email")
         AuthTextField(
             value = email,
             onValueChange = { email = it; edited() },
-            placeholder = "Email",
+            placeholder = "you@example.com",
             leadingIcon = Icons.Outlined.Email,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
         FieldError(fieldErrors["email"])
-        Spacer(Modifier.height(14.dp))
-        PhoneNumberField(
-            value = phone,
-            onValueChange = { phone = it; edited() },
-            placeholder = "Phone number (e.g. 024 123 4567)"
-        )
-        FieldError(fieldErrors["phone_number"])
         Spacer(Modifier.height(4.dp))
         Text(
-            "Add an email to sign in with your password, or a phone number to sign in with an SMS code — or both.",
+            "Phone lets you sign in with an SMS code, email with your password. One of the two is enough.",
             color = Muted,
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(Modifier.height(14.dp))
+        FieldLabel("Password")
         AuthTextField(
             value = password,
             onValueChange = { password = it; edited() },
-            placeholder = "Password",
+            placeholder = "At least $MIN_PASSWORD_LENGTH characters",
             leadingIcon = Icons.Outlined.Lock,
             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = { PasswordToggle(showPassword) { showPassword = !showPassword } },
@@ -329,21 +395,23 @@ fun SignUpScreen(
         )
         FieldError(fieldErrors["password"])
         Spacer(Modifier.height(14.dp))
+        FieldLabel("Confirm password")
         AuthTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it; edited() },
-            placeholder = "Confirm password",
+            placeholder = "Type it again",
             leadingIcon = Icons.Outlined.Lock,
             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "At least $MIN_PASSWORD_LENGTH characters.",
-            color = Muted,
-            style = MaterialTheme.typography.bodySmall
+        Spacer(Modifier.height(18.dp))
+        // Errors sit right above the button, where the user is looking after tapping it.
+        AuthNotice(
+            message = shownError,
+            title = if (localError == null && shownError != null &&
+                classifyError(shownError) == NoticeKind.Error) "Couldn't create your account" else null
         )
-        Spacer(Modifier.height(16.dp))
+        AuthNotice(formError)
         PrimaryBrandButton(
             text = if (loading) "Creating account…" else "Create account",
             loading = loading,
@@ -352,13 +420,14 @@ fun SignUpScreen(
                 val trimmedEmail = email.trim()
                 val normalizedPhone = if (phone.isBlank()) "" else normalizeGhanaPhone(phone)
                 localError = when {
-                    firstName.isBlank() || lastName.isBlank() -> "Enter your first and last name"
-                    trimmedEmail.isEmpty() && phone.isBlank() -> "Enter an email or a phone number."
-                    trimmedEmail.isNotEmpty() && !EMAIL_PATTERN.matches(trimmedEmail) -> "Enter a valid email"
-                    normalizedPhone == null -> "Enter a valid Ghana mobile number, e.g. 024 123 4567"
+                    firstName.isBlank() || lastName.isBlank() -> "Enter your first and last name."
+                    trimmedEmail.isEmpty() && phone.isBlank() -> "Add a phone number or an email so you can sign in."
+                    trimmedEmail.isNotEmpty() && !EMAIL_PATTERN.matches(trimmedEmail) ->
+                        "That email doesn't look right. Check it and try again."
+                    normalizedPhone == null -> "That number doesn't look right. Enter a Ghana mobile number, e.g. 24 123 4567."
                     password.length < MIN_PASSWORD_LENGTH ->
-                        "Password must be at least $MIN_PASSWORD_LENGTH characters"
-                    password != confirmPassword -> "Passwords don't match"
+                        "Your password needs at least $MIN_PASSWORD_LENGTH characters."
+                    password != confirmPassword -> "The two passwords don't match."
                     else -> null
                 }
                 if (localError == null && normalizedPhone != null) {
@@ -379,19 +448,6 @@ fun SignUpScreen(
             TextButton(onClick = onOpenPrivacy) {
                 Text("Privacy Policy", color = BrandGreen, style = MaterialTheme.typography.bodySmall)
             }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Already have an account? ", color = Muted)
-            TextButton(onClick = { edited(); onSignIn(phone.trim()) }) {
-                Text("Sign in", color = BrandGreen, fontWeight = FontWeight.Bold)
-            }
-        }
-        TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Back", color = Muted)
         }
     }
 }

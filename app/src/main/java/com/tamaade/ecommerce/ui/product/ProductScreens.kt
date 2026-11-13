@@ -1,5 +1,13 @@
 package com.tamaade.ecommerce.ui.product
 
+import com.tamaade.ecommerce.ui.components.FeedLoadingFooter
+import com.tamaade.ecommerce.ui.components.LoadMoreOnScroll
+import com.tamaade.ecommerce.ui.components.rememberEndlessFeed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import com.tamaade.ecommerce.data.ImagePrefetcher
+import com.tamaade.ecommerce.data.ImageSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -118,7 +126,12 @@ fun ProductListScreen(
             leadingIcon = Icons.Outlined.Search,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)
         )
+        val gridState = rememberLazyGridState()
+        // Searches stop at the last match; browsing a category or the whole catalog never ends.
+        val feed = rememberEndlessFeed(products, loop = query.isBlank(), keyPrefix = "list")
+        feed.LoadMoreOnScroll(gridState)
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -137,12 +150,15 @@ fun ProductListScreen(
                     }
                 }
             }
-            items(products, key = { it.id }) { product ->
+            items(feed.entries, key = { it.key }) { entry ->
                 ProductCard(
-                    product = product,
-                    onClick = { onProductClick(product.id) },
-                    onAddToCart = { onAddToCart(product.id) }
+                    product = entry.product,
+                    onClick = { onProductClick(entry.product.id) },
+                    onAddToCart = { onAddToCart(entry.product.id) }
                 )
+            }
+            if (feed.hasMore) {
+                item(key = "list_footer", span = { GridItemSpan(2) }) { FeedLoadingFooter() }
             }
         }
     }
@@ -324,17 +340,26 @@ fun ProductDetailScreen(
 /** Product images from the API (images[] then image); the logo shows when there are none. */
 @Composable
 private fun ProductGallery(product: Product) {
-    val urls = product.images.ifEmpty { listOfNotNull(product.image) }
+    val urls = ImagePrefetcher.galleryUrls(product)
     val pagerState = rememberPagerState(pageCount = { urls.size.coerceAtLeast(1) })
+    val context = LocalContext.current
+    // Fetch every gallery photo now so swiping never waits on the network.
+    LaunchedEffect(product.id) { ImagePrefetcher.prefetchProductGallery(context, product) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .background(CardImageBg)
     ) {
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+        HorizontalPager(
+            state = pagerState,
+            beyondViewportPageCount = 1,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
             ProductImage(
                 model = urls.getOrNull(page),
+                size = ImageSize.Full,
+                previewSize = ImageSize.Card,
                 contentDescription = product.name,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier

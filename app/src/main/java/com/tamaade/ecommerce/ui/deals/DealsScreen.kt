@@ -1,5 +1,9 @@
 package com.tamaade.ecommerce.ui.deals
 
+import com.tamaade.ecommerce.ui.components.FeedLoadingFooter
+import com.tamaade.ecommerce.ui.components.LoadMoreOnScroll
+import com.tamaade.ecommerce.ui.components.rememberEndlessFeed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,7 +60,6 @@ fun DealsScreen(
     val sections = catalog.dealsSections
         .map { it to productsForSection(it.productSource, catalog.products) }
         .filter { it.second.isNotEmpty() }
-    val fallbackDeals = if (sections.isEmpty()) catalog.deals else emptyList()
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -65,7 +68,12 @@ fun DealsScreen(
             .fillMaxSize()
             .background(PageBackground)
     ) {
+        val gridState = rememberLazyGridState()
+        // Endless deals feed: the whole page when there are no sections, else "More deals" below them.
+        val feed = rememberEndlessFeed(catalog.deals, keyPrefix = "deals_feed")
+        feed.LoadMoreOnScroll(gridState)
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -161,15 +169,23 @@ fun DealsScreen(
                 }
             }
 
-            items(fallbackDeals, key = { "deal_${it.id}" }) { product ->
+            if (sections.isNotEmpty() && feed.entries.isNotEmpty()) {
+                item(key = "deals_feed_header", span = fullSpan) {
+                    SectionHeader(title = "More deals", subtitle = "Keep scrolling", onAction = null)
+                }
+            }
+            items(feed.entries, key = { it.key }) { entry ->
                 ProductCard(
-                    product = product,
-                    onClick = { onProductClick(product.id) },
-                    onAddToCart = { onAddToCart(product.id) }
+                    product = entry.product,
+                    onClick = { onProductClick(entry.product.id) },
+                    onAddToCart = { onAddToCart(entry.product.id) }
                 )
             }
+            if (feed.hasMore) {
+                item(key = "deals_feed_footer", span = fullSpan) { FeedLoadingFooter() }
+            }
 
-            if (sections.isEmpty() && fallbackDeals.isEmpty()) {
+            if (sections.isEmpty() && catalog.deals.isEmpty()) {
                 item(span = fullSpan) {
                     EmptyState(
                         title = "No deals right now",
